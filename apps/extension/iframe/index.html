@@ -68,12 +68,29 @@
             }
         }
 
+        // Subscribe to events from main process
+        function subscribeEvents() {
+            try {
+                eda.sys_MessageBus.subscribePublic('easyeda-ai-bridge-events', (msg) => {
+                    if (msg.type === 'execute') {
+                        addLog('→ EXECUTE: ' + msg.data.code.substring(0, 80) + (msg.data.code.length > 80 ? '...' : ''));
+                    } else if (msg.type === 'result') {
+                        const resultStr = JSON.stringify(msg.data.result);
+                        addLog('← RESULT (' + msg.data.duration + 'ms): ' + resultStr.substring(0, 100) + (resultStr.length > 100 ? '...' : ''));
+                    } else if (msg.type === 'error') {
+                        addLog('✕ ERROR (' + msg.data.duration + 'ms): ' + msg.data.error);
+                    }
+                });
+                addLog('Subscribed to events');
+            } catch(e) {
+                addLog('Subscribe error: ' + e.message);
+            }
+        }
+
         // Call main extension RPC service to get status
         async function queryStatus() {
-            addLog('Querying status via RPC...');
             try {
                 const result = await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status');
-                addLog('RPC result: ' + JSON.stringify(result));
                 if (result) {
                     updateStatus(result.connected);
                     if (result.windowId) {
@@ -88,8 +105,9 @@
         // Poll status every 2 seconds
         function init() {
             addLog('IFrame loaded');
+            subscribeEvents();
             queryStatus();
-            setInterval(queryStatus, 2000);
+            setInterval(queryStatus, 10000);
         }
 
         if (window.eda) {

@@ -4,6 +4,7 @@ const DEFAULT_BRIDGE_URL = 'ws://localhost:49620/eda';
 const STORAGE_KEY = 'easyeda_bridge_url';
 const SOCKET_ID = 'easyeda-ai-bridge-socket';
 const MESSAGE_BUS_CHANNEL = 'easyeda-ai-bridge-status';
+const MESSAGE_BUS_EVENTS = 'easyeda-ai-bridge-events';
 const RPC_SERVICE_NAME = 'ai-bridge-status';
 
 let windowId = '';
@@ -45,6 +46,18 @@ function broadcastStatus(connected: boolean): void {
     }, 100);
   } catch (err) {
     console.log('[AI Bridge] Broadcast error:', err);
+  }
+}
+
+function broadcastEvent(type: string, data: unknown): void {
+  try {
+    eda.sys_MessageBus.publishPublic(MESSAGE_BUS_EVENTS, {
+      type,
+      data,
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.log('[AI Bridge] Event broadcast error:', err);
   }
 }
 
@@ -149,8 +162,13 @@ function connectToBridge(): void {
             const code = msg.code;
             const id = msg.id;
             
+            broadcastEvent('execute', { id, code });
+            
+            const startTime = Date.now();
             executeCode(code)
               .then(result => {
+                const duration = Date.now() - startTime;
+                broadcastEvent('result', { id, result, duration });
                 sendToBridge({
                   type: 'result',
                   id,
@@ -159,6 +177,8 @@ function connectToBridge(): void {
                 });
               })
               .catch(error => {
+                const duration = Date.now() - startTime;
+                broadcastEvent('error', { id, error: toSafeErrorMessage(error), duration });
                 sendToBridge({
                   type: 'error',
                   id,
