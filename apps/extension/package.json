@@ -9,11 +9,11 @@
 	},
 	"scripts": {
 		"update-build-time": "ts-node ./build/update-build-time.ts",
-		"build:css": "tailwindcss -i ./iframe/src/input.css -o ./iframe/styles.css --minify",
+		"build:css": "tailwindcss -i ./iframe/src/input.css -o ./dist/styles.css --minify && cp ./iframe/index.html ./dist/",
 		"compile": "rimraf ./dist/ && ts-node ./config/esbuild.prod.ts",
 		"lint": "eslint",
 		"fix": "eslint --fix",
-		"build": "npm run build:css && npm run compile && ts-node ./build/packaged.ts"
+		"build": "npm run compile && npm run build:css && ts-node ./build/packaged.ts"
 	},
 	"dependencies": {
 		"overlayscrollbars": "^2.14.0",

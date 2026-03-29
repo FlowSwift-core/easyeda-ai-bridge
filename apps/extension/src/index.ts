@@ -10,7 +10,7 @@ export function about(): void {
 }
 
 export async function openIFrame(): Promise<void> {
-	await eda.sys_IFrame.openIFrame('/iframe/index.html', 400, 300, 'ai-bridge-test', {
+	await eda.sys_IFrame.openIFrame('/dist/index.html', 400, 300, 'ai-bridge-test', {
 		maximizeButton: true,
 		minimizeButton: true,
 		title: 'AI Bridge Test',
