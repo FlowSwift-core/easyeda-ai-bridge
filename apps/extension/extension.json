@@ -27,7 +27,9 @@
 	},
 	"homepage": "https://github.com/easyeda-ai/bridge",
 	"bugs": "https://github.com/easyeda-ai/bridge/issues",
-	"activationEvents": {},
+	"activationEvents": {
+		"onStartupFinished": true
+	},
 	"entry": "./dist/index",
 	"dependentExtensions": {},
 	"headerMenus": {

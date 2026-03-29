@@ -188,12 +188,16 @@ const httpServer = createServer(async (req, res) => {
       activeEdaWindowId = windowId;
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, activeWindowId }));
+      return;
     }
-    catch {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid request body' }));
+    catch (err) {
+      console.error('[HTTP] /eda-windows/select error:', err.message);
+      if (!res.headersSent) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid request body' }));
+      }
+      return;
     }
-    return;
   }
 
   // Execute code on EDA
@@ -323,6 +327,28 @@ wss.on('connection', (ws, req) => {
     });
   }
 });
+
+// ─── Heartbeat: periodic ping to all EDA clients ─────────────────────
+const HEARTBEAT_INTERVAL_MS = 5000;
+
+setInterval(() => {
+  if (edaClients.size === 0) return;
+  
+  for (const [windowId, ws] of edaClients) {
+    if (ws.readyState === 1) {
+      try {
+        ws.send(JSON.stringify({
+          type: 'ping',
+          id: randomUUID(),
+          timestamp: Date.now(),
+        }));
+        console.log(`[WS] ♥ heartbeat sent to ${windowId}`);
+      } catch (err) {
+        console.error(`[WS] heartbeat failed for ${windowId}:`, err.message);
+      }
+    }
+  }
+}, HEARTBEAT_INTERVAL_MS);
 
 // ─── Core logic ─────────────────────────────────────────────────────
 

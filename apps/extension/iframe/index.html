@@ -8,228 +8,95 @@
     <style>
         * { box-sizing: border-box; }
         body { 
-            font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Droid Sans Mono", "Source Code Pro", monospace;
+            font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
             font-size: 12px;
             background: rgba(13, 17, 23, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
             color: #c9d1d9;
             margin: 0;
-            padding: 0;
+            padding: 16px;
         }
+        .status {
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .status.connected { color: #3fb950; }
+        .status.disconnected { color: #f85149; }
+        .log {
+            font-size: 11px;
+            color: #8b949e;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 8px;
+        }
+        button:hover { background: #2ea043; }
     </style>
 </head>
-<body class="h-screen overflow-hidden">
-    <div class="flex flex-col h-full">
-        <!-- Title Bar -->
-        <div class="flex items-center justify-between px-3 py-2 bg-[rgba(22,27,34,0.8)] border-b border-[#30363d]">
-            <div class="flex items-center gap-2">
-                <span class="text-[#58a6ff]">●</span>
-                <span class="text-[#c9d1d9] font-medium">AI Bridge — WebSocket Console</span>
-            </div>
-            <div class="flex items-center gap-3">
-                <span id="status-indicator" class="text-[#8b949e]">
-                    <span class="text-[#f85149]">○</span> disconnected
-                </span>
-            </div>
-        </div>
-
-        <!-- Server Info -->
-        <div class="flex items-center gap-4 px-3 py-2 bg-[#0d1117] border-b border-[#21262d] text-[11px]">
-            <div class="flex items-center gap-2">
-                <span class="text-[#8b949e]">SERVER:</span>
-                <input id="server-url" type="text" value="ws://localhost:49620/eda" 
-                    class="bg-transparent text-[#58a6ff] outline-none font-mono text-xs w-56"
-                    onblur="saveServerUrl()">
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="text-[#8b949e]">CONNECTIONS:</span>
-                <span id="connection-count" class="text-[#d29922]">0</span>
-            </div>
-        </div>
-
-        <!-- Terminal -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <div class="flex-1 overflow-y-auto px-3 py-2" id="log-container">
-                <div id="logs"></div>
-                <div id="empty-state" class="text-[#484f58] py-4">
-                    <div class="mb-2">_</div>
-                    <div class="text-[#8b949e]">waiting for connection...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Input Area -->
-        <div class="px-3 py-2 bg-[#0d1117] border-t border-[#21262d]">
-            <div class="flex items-center gap-2">
-                <span class="text-[#58a6ff]">›</span>
-                <input id="msg-input" type="text" 
-                    class="flex-1 bg-transparent text-[#c9d1d9] outline-none font-mono text-xs placeholder-[#484f58]"
-                    placeholder="type message and press enter..."
-                    onkeypress="if(event.key==='Enter')sendMessage()">
-            </div>
-            <div class="flex items-center justify-between mt-2">
-                <button id="btn-connect" onclick="toggleConnection()" class="text-[11px] text-[#58a6ff] hover:text-[#79c0ff] underline">
-                    [connect]
-                </button>
-                <button onclick="clearLogs()" class="text-[11px] text-[#8b949e] hover:text-[#c9d1d9]">
-                    clear
-                </button>
-            </div>
-        </div>
+<body>
+    <div class="status disconnected" id="status">○ disconnected</div>
+    <div style="margin-bottom: 12px;">
+        <button onclick="queryStatus()">Query Status</button>
     </div>
+    <div class="log" id="log"></div>
 
     <script>
-        const WS_ID = 'ai-bridge-ws';
-        let WS_URL = 'ws://localhost:49620/eda';
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
         
-        let ws = null;
-        let logs = [];
-        const MAX_LOGS = 100;
-
-        function saveServerUrl() {
-            const input = document.getElementById('server-url');
-            WS_URL = input.value.trim();
-            log('info', 'server URL set to: ' + WS_URL);
-        }
-
-        function log(type, message, direction = 'info') {
-            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-            logs.push({ time, type, message, direction });
-            if (logs.length > MAX_LOGS) logs.shift();
-            renderLogs();
-        }
-
-        function getTypePrefix(direction) {
-            const prefixes = {
-                'sent': '››',
-                'received': '‹‹',
-                'info': '··',
-                'error': '!!',
-                'success': '✓✓'
-            };
-            return prefixes[direction] || '··';
-        }
-
-        function getTypeColor(direction) {
-            const colors = {
-                'sent': '#3fb950',
-                'received': '#a371f7',
-                'info': '#8b949e',
-                'error': '#f85149',
-                'success': '#3fb950'
-            };
-            return colors[direction] || '#8b949e';
-        }
-
-        function renderLogs() {
-            const container = document.getElementById('logs');
-            const emptyState = document.getElementById('empty-state');
-            
-            if (logs.length === 0) {
-                emptyState.style.display = 'block';
-                container.innerHTML = '';
-                return;
-            }
-            
-            emptyState.style.display = 'none';
-            container.innerHTML = logs.map(l => `
-                <div class="log-entry py-0.5">
-                    <span class="text-[#484f58]">[${l.time}]</span>
-                    <span style="color: ${getTypeColor(l.direction)}">${getTypePrefix(l.direction)}</span>
-                    <span style="color: ${getTypeColor(l.direction)}">${escapeHtml(l.message)}</span>
-                </div>
-            `).join('');
-            
-            document.getElementById('log-container').scrollTop = container.scrollHeight;
-        }
-
-        function escapeHtml(text) {
+        function addLog(msg) {
             const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function clearLogs() {
-            logs = [];
-            renderLogs();
-            log('info', 'log cleared');
+            div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
         }
 
         function updateStatus(connected) {
-            const indicator = document.getElementById('status-indicator');
-            const btn = document.getElementById('btn-connect');
-            
             if (connected) {
-                indicator.innerHTML = '<span class="text-[#3fb950]">●</span> connected';
-                btn.textContent = '[disconnect]';
+                status.textContent = '● connected';
+                status.className = 'status connected';
             } else {
-                indicator.innerHTML = '<span class="text-[#f85149]">○</span> disconnected';
-                btn.textContent = '[connect]';
+                status.textContent = '○ disconnected';
+                status.className = 'status disconnected';
             }
         }
 
-        async function toggleConnection() {
-            if (ws) {
-                try {
-                    eda.sys_WebSocket.close(WS_ID);
-                    ws = null;
-                    updateStatus(false);
-                    document.getElementById('connection-count').textContent = '0';
-                    log('info', 'disconnected');
-                } catch (e) {
-                    log('error', 'disconnect failed: ' + e.message);
-                }
-            } else {
-                const serverUrl = document.getElementById('server-url').value.trim();
-                try {
-                    eda.sys_WebSocket.register(
-                        WS_ID,
-                        serverUrl,
-                        (event) => {
-                            try {
-                                const data = JSON.parse(event.data);
-                                log('received', JSON.stringify(data, null, 2), 'received');
-                            } catch {
-                                log('received', event.data, 'received');
-                            }
-                        },
-                        () => {
-                            ws = { send: (data) => eda.sys_WebSocket.send(WS_ID, data) };
-                            updateStatus(true);
-                            log('success', 'connected to ' + serverUrl, 'success');
-                            document.getElementById('connection-count').textContent = '1';
-                        }
-                    );
-                } catch (e) {
-                    log('error', 'connection failed: ' + e.message);
-                }
-            }
-        }
-
-        function sendMessage() {
-            const input = document.getElementById('msg-input');
-            const msg = input.value.trim();
-            if (!msg) return;
-            
-            if (!ws) {
-                log('error', 'not connected');
-                return;
-            }
-
+        // Call main extension RPC service to get status
+        async function queryStatus() {
+            addLog('Querying status via RPC...');
             try {
-                ws.send(msg);
-                log('sent', msg, 'sent');
-                input.value = '';
-            } catch (e) {
-                log('error', 'send failed: ' + e.message);
+                const result = await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status');
+                addLog('RPC result: ' + JSON.stringify(result));
+                if (result) {
+                    updateStatus(result.connected);
+                    if (result.windowId) {
+                        addLog('Window ID: ' + result.windowId);
+                    }
+                }
+            } catch(e) {
+                addLog('RPC error: ' + e.message);
             }
         }
 
-        window.addEventListener('load', () => {
-            log('info', 'ai bridge ready');
-            setTimeout(() => toggleConnection(), 300);
-        });
+        // Poll status every 2 seconds
+        function init() {
+            addLog('IFrame loaded');
+            queryStatus();
+            setInterval(queryStatus, 2000);
+        }
+
+        if (window.eda) {
+            init();
+        } else {
+            window.onload = () => setTimeout(init, 500);
+        }
     </script>
 </body>
 </html>
