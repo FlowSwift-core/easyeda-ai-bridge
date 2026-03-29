@@ -1,0 +1,89 @@
+{
+	"name": "easy-eda-ai-bridge",
+	"uuid": "303392c332a444e4a8291c722d7f2056",
+	"displayName": "AI Bridge",
+	"description": "WebSocket bridge between EasyEDA Pro and AI agents.",
+	"version": "1.0.0",
+	"publisher": "EasyEDA AI Team",
+	"engines": {
+		"eda": "^3.0.0"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "extension-store",
+		"url": ""
+	},
+	"categories": "Project",
+	"keywords": [
+		"EDA",
+		"AI",
+		"Design",
+		"Copilot",
+		"Agent",
+		"Bridge"
+	],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://github.com/easyeda-ai/bridge",
+	"bugs": "https://github.com/easyeda-ai/bridge/issues",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"home": [
+			{
+				"id": "ai-bridge",
+				"title": "AI Bridge",
+				"menuItems": [
+					{
+						"id": "OpenIFrame",
+						"title": "Test IFrame",
+						"registerFn": "openIFrame"
+					},
+					{
+						"id": "About",
+						"title": "About...",
+						"registerFn": "about"
+					}
+				]
+			}
+		],
+		"sch": [
+			{
+				"id": "ai-bridge",
+				"title": "AI Bridge",
+				"menuItems": [
+					{
+						"id": "OpenIFrame",
+						"title": "Test IFrame",
+						"registerFn": "openIFrame"
+					},
+					{
+						"id": "About",
+						"title": "About...",
+						"registerFn": "about"
+					}
+				]
+			}
+		],
+		"pcb": [
+			{
+				"id": "ai-bridge",
+				"title": "AI Bridge",
+				"menuItems": [
+					{
+						"id": "OpenIFrame",
+						"title": "Test IFrame",
+						"registerFn": "openIFrame"
+					},
+					{
+						"id": "About",
+						"title": "About...",
+						"registerFn": "about"
+					}
+				]
+			}
+		]
+	}
+}

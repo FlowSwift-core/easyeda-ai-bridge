@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "extension-dev-mcp-tools": {
+      "type": "local",
+      "command": [
+        "node",
+        "/home/wanghsinche/Desktop/extension-dev-mcp-tools/dist/index.js"
+      ],
+      "enabled": true
+    }
+  }
+}

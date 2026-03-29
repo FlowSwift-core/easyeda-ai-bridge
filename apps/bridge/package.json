@@ -1,0 +1,12 @@
+{
+  "name": "bridge",
+  "version": "1.0.3",
+  "description": "EasyEDA Pro AI Bridge Server",
+  "type": "module",
+  "scripts": {
+    "server": "node scripts/bridge-server.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
