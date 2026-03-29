@@ -10,7 +10,9 @@
         body { 
             font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Droid Sans Mono", "Source Code Pro", monospace;
             font-size: 12px;
-            background: #0d1117;
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             color: #c9d1d9;
             margin: 0;
             padding: 0;
@@ -20,7 +22,7 @@
 <body class="h-screen overflow-hidden">
     <div class="flex flex-col h-full">
         <!-- Title Bar -->
-        <div class="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-[#30363d]">
+        <div class="flex items-center justify-between px-3 py-2 bg-[rgba(22,27,34,0.8)] border-b border-[#30363d]">
             <div class="flex items-center gap-2">
                 <span class="text-[#58a6ff]">●</span>
                 <span class="text-[#c9d1d9] font-medium">AI Bridge — WebSocket Console</span>
@@ -36,7 +38,9 @@
         <div class="flex items-center gap-4 px-3 py-2 bg-[#0d1117] border-b border-[#21262d] text-[11px]">
             <div class="flex items-center gap-2">
                 <span class="text-[#8b949e]">SERVER:</span>
-                <span id="server-url" class="text-[#58a6ff]">ws://localhost:49620/eda</span>
+                <input id="server-url" type="text" value="ws://localhost:49620/eda" 
+                    class="bg-transparent text-[#58a6ff] outline-none font-mono text-xs w-56"
+                    onblur="saveServerUrl()">
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-[#8b949e]">CONNECTIONS:</span>
@@ -77,11 +81,17 @@
 
     <script>
         const WS_ID = 'ai-bridge-ws';
-        const WS_URL = 'ws://localhost:49620/eda';
+        let WS_URL = 'ws://localhost:49620/eda';
         
         let ws = null;
         let logs = [];
         const MAX_LOGS = 100;
+
+        function saveServerUrl() {
+            const input = document.getElementById('server-url');
+            WS_URL = input.value.trim();
+            log('info', 'server URL set to: ' + WS_URL);
+        }
 
         function log(type, message, direction = 'info') {
             const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -171,10 +181,11 @@
                     log('error', 'disconnect failed: ' + e.message);
                 }
             } else {
+                const serverUrl = document.getElementById('server-url').value.trim();
                 try {
                     eda.sys_WebSocket.register(
                         WS_ID,
-                        WS_URL,
+                        serverUrl,
                         (event) => {
                             try {
                                 const data = JSON.parse(event.data);
@@ -186,7 +197,7 @@
                         () => {
                             ws = { send: (data) => eda.sys_WebSocket.send(WS_ID, data) };
                             updateStatus(true);
-                            log('success', 'connected to ' + WS_URL, 'success');
+                            log('success', 'connected to ' + serverUrl, 'success');
                             document.getElementById('connection-count').textContent = '1';
                         }
                     );
