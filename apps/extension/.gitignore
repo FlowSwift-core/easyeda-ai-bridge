@@ -1,6 +1,5 @@
 # Build outputs
 /dist/
-/iframe/
 /build/dist/
 
 # Dependencies
