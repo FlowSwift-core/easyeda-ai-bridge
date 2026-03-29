@@ -6,106 +6,70 @@
     <title>AI Bridge</title>
     <link rel="stylesheet" href="/dist/styles.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+        * { box-sizing: border-box; }
+        body { 
+            font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", "Droid Sans Mono", "Source Code Pro", monospace;
+            font-size: 12px;
+            background: #0d1117;
+            color: #c9d1d9;
+            margin: 0;
+            padding: 0;
+        }
     </style>
 </head>
-<body class="bg-gh-bg text-gh-text h-screen overflow-hidden">
+<body class="h-screen overflow-hidden">
     <div class="flex flex-col h-full">
-        <!-- Header -->
-        <header class="flex items-center justify-between px-4 py-3 bg-gh-card/80 border-b border-gh-border/60">
-            <div class="flex items-center gap-3">
-                <!-- Logo -->
-                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M13 3L4 14h7l-2 7 9-11h-7l2-7z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h1 class="text-sm font-semibold text-gh-white tracking-wide">AI Bridge</h1>
-                    <p class="text-[11px] text-gh-muted">EasyEDA WebSocket Bridge</p>
-                </div>
-                <div class="w-px h-6 bg-gh-border mx-1"></div>
-                <!-- Status -->
-                <div class="flex items-center gap-2">
-                    <span id="status-dot" class="w-2 h-2 rounded-full bg-gray-500"></span>
-                    <span id="status-badge" class="badge bg-gray-700/50 text-gray-400">未连接</span>
-                </div>
-            </div>
+        <!-- Title Bar -->
+        <div class="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-[#30363d]">
             <div class="flex items-center gap-2">
-                <button id="btn-connect" onclick="toggleConnection()" class="btn bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25">
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                    </svg>
-                    连接
-                </button>
-                <button onclick="clearLogs()" class="btn bg-gh-border/50 hover:bg-gh-border text-gh-text">
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                    </svg>
-                    清空
-                </button>
+                <span class="text-[#58a6ff]">●</span>
+                <span class="text-[#c9d1d9] font-medium">AI Bridge — WebSocket Console</span>
             </div>
-        </header>
-
-        <!-- Info Cards -->
-        <div class="flex gap-3 px-4 py-3 bg-gh-bg/50">
-            <div class="card flex-1">
-                <div class="flex items-center gap-2 text-[11px] text-gh-muted mb-1">
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M20 13H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-6c0-.55-.45-1-1-1zM7 19c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zM20 3H4c-.55 0-1 .45-1 1v6c0 .55.45 1 1 1h16c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zM7 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
-                    </svg>
-                    服务器地址
-                </div>
-                <div id="server-url" class="text-sm text-gh-blue font-mono truncate">ws://localhost:49620/eda</div>
-            </div>
-            <div class="card flex-1">
-                <div class="flex items-center gap-2 text-[11px] text-gh-muted mb-1">
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
-                    </svg>
-                    连接数
-                </div>
-                <div class="flex items-baseline gap-1">
-                    <span id="connection-count" class="text-2xl font-bold text-gh-yellow">0</span>
-                    <span class="text-xs text-gh-muted">个连接</span>
-                </div>
+            <div class="flex items-center gap-3">
+                <span id="status-indicator" class="text-[#8b949e]">
+                    <span class="text-[#f85149]">○</span> disconnected
+                </span>
             </div>
         </div>
 
-        <!-- Log Container -->
-        <div class="flex-1 mx-4 mb-3 rounded-xl bg-gh-card/40 border border-gh-border/40 flex flex-col overflow-hidden">
-            <div class="flex items-center justify-between px-3 py-2 bg-gh-card/60 border-b border-gh-border/30">
-                <div class="flex items-center gap-2 text-[11px] text-gh-muted">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                    消息日志
-                </div>
-                <span id="log-count" class="text-[11px] text-gh-muted">0 条消息</span>
+        <!-- Server Info -->
+        <div class="flex items-center gap-4 px-3 py-2 bg-[#0d1117] border-b border-[#21262d] text-[11px]">
+            <div class="flex items-center gap-2">
+                <span class="text-[#8b949e]">SERVER:</span>
+                <span id="server-url" class="text-[#58a6ff]">ws://localhost:49620/eda</span>
             </div>
-            <div id="log-container" class="flex-1 overflow-y-auto">
-                <div id="logs" class="py-1"></div>
-                <div id="empty-state" class="flex flex-col items-center justify-center h-full text-gh-muted py-12">
-                    <svg class="w-10 h-10 mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
-                    </svg>
-                    <p class="text-sm">暂无消息</p>
-                    <p class="text-xs mt-1 opacity-60">连接后将显示 WebSocket 消息</p>
+            <div class="flex items-center gap-2">
+                <span class="text-[#8b949e]">CONNECTIONS:</span>
+                <span id="connection-count" class="text-[#d29922]">0</span>
+            </div>
+        </div>
+
+        <!-- Terminal -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex-1 overflow-y-auto px-3 py-2" id="log-container">
+                <div id="logs"></div>
+                <div id="empty-state" class="text-[#484f58] py-4">
+                    <div class="mb-2">_</div>
+                    <div class="text-[#8b949e]">waiting for connection...</div>
                 </div>
             </div>
         </div>
 
         <!-- Input Area -->
-        <div class="px-4 pb-4">
-            <div class="flex gap-2">
-                <input id="msg-input" type="text" placeholder="输入 JSON 消息或纯文本..." 
-                    class="input"
+        <div class="px-3 py-2 bg-[#0d1117] border-t border-[#21262d]">
+            <div class="flex items-center gap-2">
+                <span class="text-[#58a6ff]">›</span>
+                <input id="msg-input" type="text" 
+                    class="flex-1 bg-transparent text-[#c9d1d9] outline-none font-mono text-xs placeholder-[#484f58]"
+                    placeholder="type message and press enter..."
                     onkeypress="if(event.key==='Enter')sendMessage()">
-                <button onclick="sendMessage()" class="btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25">
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
-                    发送
+            </div>
+            <div class="flex items-center justify-between mt-2">
+                <button id="btn-connect" onclick="toggleConnection()" class="text-[11px] text-[#58a6ff] hover:text-[#79c0ff] underline">
+                    [connect]
+                </button>
+                <button onclick="clearLogs()" class="text-[11px] text-[#8b949e] hover:text-[#c9d1d9]">
+                    clear
                 </button>
             </div>
         </div>
@@ -126,47 +90,44 @@
             renderLogs();
         }
 
-        function getTypeLabel(direction) {
-            const labels = {
-                'sent': '发送',
-                'received': '接收',
-                'info': '信息',
-                'error': '错误',
-                'success': '成功'
+        function getTypePrefix(direction) {
+            const prefixes = {
+                'sent': '››',
+                'received': '‹‹',
+                'info': '··',
+                'error': '!!',
+                'success': '✓✓'
             };
-            return labels[direction] || direction;
+            return prefixes[direction] || '··';
         }
 
-        function getTypeClasses(direction) {
-            const classes = {
-                'sent': 'bg-emerald-500/15 text-emerald-400',
-                'received': 'bg-blue-500/15 text-blue-400',
-                'info': 'bg-gray-500/15 text-gray-400',
-                'error': 'bg-red-500/15 text-red-400',
-                'success': 'bg-emerald-500/15 text-emerald-400'
+        function getTypeColor(direction) {
+            const colors = {
+                'sent': '#3fb950',
+                'received': '#a371f7',
+                'info': '#8b949e',
+                'error': '#f85149',
+                'success': '#3fb950'
             };
-            return classes[direction] || classes.info;
+            return colors[direction] || '#8b949e';
         }
 
         function renderLogs() {
             const container = document.getElementById('logs');
             const emptyState = document.getElementById('empty-state');
-            const logCount = document.getElementById('log-count');
-            
-            logCount.textContent = `${logs.length} 条消息`;
             
             if (logs.length === 0) {
-                emptyState.style.display = 'flex';
+                emptyState.style.display = 'block';
                 container.innerHTML = '';
                 return;
             }
             
             emptyState.style.display = 'none';
             container.innerHTML = logs.map(l => `
-                <div class="log-entry ${l.direction} flex items-start gap-3 px-3 py-2 border-b border-gh-border/20 hover:bg-white/[0.02] transition-colors animate-slide-in">
-                    <span class="text-[11px] text-gh-muted/60 font-mono flex-shrink-0 w-16">${l.time}</span>
-                    <span class="text-[10px] px-1.5 py-0.5 rounded font-medium ${getTypeClasses(l.direction)} flex-shrink-0">${getTypeLabel(l.direction)}</span>
-                    <span class="text-xs text-gh-text/90 font-mono break-all leading-relaxed">${escapeHtml(l.message)}</span>
+                <div class="log-entry py-0.5">
+                    <span class="text-[#484f58]">[${l.time}]</span>
+                    <span style="color: ${getTypeColor(l.direction)}">${getTypePrefix(l.direction)}</span>
+                    <span style="color: ${getTypeColor(l.direction)}">${escapeHtml(l.message)}</span>
                 </div>
             `).join('');
             
@@ -182,34 +143,19 @@
         function clearLogs() {
             logs = [];
             renderLogs();
-            log('info', '日志已清空');
+            log('info', 'log cleared');
         }
 
         function updateStatus(connected) {
-            const badge = document.getElementById('status-badge');
+            const indicator = document.getElementById('status-indicator');
             const btn = document.getElementById('btn-connect');
-            const dot = document.getElementById('status-dot');
             
             if (connected) {
-                badge.textContent = '已连接';
-                badge.className = 'badge bg-emerald-500/15 text-emerald-400';
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 status-pulse';
-                btn.innerHTML = `
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    断开`;
-                btn.className = 'btn bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-lg shadow-red-500/25';
+                indicator.innerHTML = '<span class="text-[#3fb950]">●</span> connected';
+                btn.textContent = '[disconnect]';
             } else {
-                badge.textContent = '未连接';
-                badge.className = 'badge bg-gray-700/50 text-gray-400';
-                dot.className = 'w-2 h-2 rounded-full bg-gray-500';
-                btn.innerHTML = `
-                    <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                    </svg>
-                    连接`;
-                btn.className = 'btn bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white shadow-lg shadow-green-500/25';
+                indicator.innerHTML = '<span class="text-[#f85149]">○</span> disconnected';
+                btn.textContent = '[connect]';
             }
         }
 
@@ -220,9 +166,9 @@
                     ws = null;
                     updateStatus(false);
                     document.getElementById('connection-count').textContent = '0';
-                    log('info', '已断开连接');
+                    log('info', 'disconnected');
                 } catch (e) {
-                    log('error', '断开失败: ' + e.message);
+                    log('error', 'disconnect failed: ' + e.message);
                 }
             } else {
                 try {
@@ -240,12 +186,12 @@
                         () => {
                             ws = { send: (data) => eda.sys_WebSocket.send(WS_ID, data) };
                             updateStatus(true);
-                            log('success', '连接成功!', 'success');
+                            log('success', 'connected to ' + WS_URL, 'success');
                             document.getElementById('connection-count').textContent = '1';
                         }
                     );
                 } catch (e) {
-                    log('error', '连接失败: ' + e.message);
+                    log('error', 'connection failed: ' + e.message);
                 }
             }
         }
@@ -256,7 +202,7 @@
             if (!msg) return;
             
             if (!ws) {
-                log('error', '请先连接 WebSocket');
+                log('error', 'not connected');
                 return;
             }
 
@@ -265,13 +211,12 @@
                 log('sent', msg, 'sent');
                 input.value = '';
             } catch (e) {
-                log('error', '发送失败: ' + e.message);
+                log('error', 'send failed: ' + e.message);
             }
         }
 
         window.addEventListener('load', () => {
-            log('info', '正在连接服务器...');
-            toggleConnection();
+            log('info', 'ai bridge ready');
         });
     </script>
 </body>
