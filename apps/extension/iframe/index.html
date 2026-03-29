@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Bridge Test</title>
+    <style>
+        body {
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-log { background: #4CAF50; color: white; border: none; }
+        .btn-dialog { background: #2196F3; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <h3>AI Bridge Test</h3>
+    <button class="btn-log" onclick="testConsole()">Console Log</button>
+    <button class="btn-dialog" onclick="testDialog()">EDA Dialog</button>
+    
+    <script>
+        function testConsole() {
+            console.log('[AI Bridge] Button clicked - Console Test');
+            console.log('[AI Bridge] Version: 1.0.0');
+            console.warn('[AI Bridge] Warning test');
+            console.error('[AI Bridge] Error test');
+            alert('Console logged! Check browser console.');
+        }
+        
+        function testDialog() {
+            if (window.eda) {
+                eda.sys_Dialog.showInformationMessage('Hello from AI Bridge!', 'Test Dialog');
+            } else {
+                alert('eda API not available');
+            }
+        }
+    </script>
+</body>
+</html>
