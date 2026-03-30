@@ -1,519 +1,240 @@
 /**
- * EasyEDA WebSocket Bridge Server
- *
- * 这是一个 Node.js WebSocket 服务端，用于桥接 AI 编程工具和 EasyEDA Pro 客户端。
- * 支持所有兼容 Agent Skills 标准的工具（Claude Code、OpenCode、QwenCode 等）。
- *
- * 架构：
- *   ┌──────────────┐   HTTP/WS     ┌────────────────┐   WebSocket    ┌──────────┐
- *   │   AI Agent    │ ◄───────────► │  Bridge Server  │ ◄───────────► │  EasyEDA  │
- *   │  (Skill Tool) │  Port Range   │  (This Server)  │  Port Range   │  (Client) │
- *   └──────────────┘  49620-49629   └────────────────┘  49620-49629   └──────────┘
- *
- * 端口范围 49620-49629，启动时自动检测可用端口。
- * EasyEDA 扩展通过 eda.sys_WebSocket.register() 连接到此服务。
- * AI 通过 HTTP API 或直接 WebSocket 发送代码执行请求。
- *
- * 握手验证协议：
- * - GET /health 返回 { service: "easyeda-bridge", ... }
- * - WebSocket 连接后服务端发送 { type: "handshake", service: "easyeda-bridge" }
- * - 客户端需验证 service 字段匹配后才确认连接有效
- *
- * 协议格式（JSON）：
- * {
- *   "type": "execute" | "result" | "error" | "ping" | "pong" | "handshake",
- *   "id": "<request-uuid>",
- *   "code": "<js code string>",           // execute 时
- *   "result": <any>,                       // result 时
- *   "error": "<error message>",            // error 时
- *   "timestamp": <unix ms>
- * }
+ * EasyEDA Bridge Server - 6-Digit Pairing + HTTP Only (Hono.js)
  */
 
-import { WebSocketServer } from 'ws';
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 import { randomUUID } from 'node:crypto';
-import { createServer, get as httpGet } from 'node:http';
-import { createConnection } from 'node:net';
 
-// ─── Port Configuration ─────────────────────────────────────────────
-const PORT_START = 49620;
-const PORT_END = 49629;
+const PORT = 49620;
 const SERVICE_ID = 'easyeda-bridge';
 
-// ─── State ──────────────────────────────────────────────────────────
-/** @type {Map<string, import('ws').WebSocket>} EDA window ID -> WebSocket */
-const edaClients = new Map();
+const PAIR_CODE_TTL_MS = 30 * 60 * 1000;
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const POLL_TIMEOUT_MS = 30_000;
+const POLL_INTERVAL_MS = 100;
 
-/** @type {Map<string, {resolve: Function, reject: Function, timer: NodeJS.Timeout}>} */
-const pendingRequests = new Map();
+const pairCodeMap = new Map();
+const sessionMap = new Map();
+const pendingCommands = new Map(); // Agent → EDA: commands waiting for EDA to poll
+const pendingResults = new Map();   // EDA → Agent: results waiting for Agent to collect
 
-/** @type {string | null} 当前AI端选中的EDA窗口ID */
-let activeEdaWindowId = null;
+function generatePairCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
-const REQUEST_TIMEOUT_MS = 30_000;
-
-// ─── Port Detection ─────────────────────────────────────────────────
-
-/**
- * Check if a TCP port is already in use.
- * @param {number} port
- * @returns {Promise<boolean>} true if port is in use
- */
-function isPortInUse(port) {
-  return new Promise((resolve) => {
-    const socket = createConnection({ port, host: '127.0.0.1' });
-    socket.setTimeout(300);
-    socket.on('connect', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.on('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.on('error', () => {
-      socket.destroy();
-      resolve(false);
-    });
+function createSession() {
+  const sessionId = `sess_${randomUUID().slice(0, 8)}`;
+  sessionMap.set(sessionId, {
+    createdAt: Date.now(),
+    lastActive: Date.now(),
+    paired: false,
   });
+  return sessionId;
 }
 
-/**
- * Check if a port is already running our bridge service.
- * Sends HTTP GET /health and verifies { service: "easyeda-bridge" }.
- * @param {number} port
- * @returns {Promise<boolean>}
- */
-function isBridgeRunning(port) {
-  return new Promise((resolve) => {
-    const req = httpGet(`http://127.0.0.1:${port}/health`, { timeout: 800 }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          resolve(json.service === SERVICE_ID);
-        } catch {
-          resolve(false);
-        }
-      });
-    });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-  });
+function isSessionValid(sessionId) {
+  const session = sessionMap.get(sessionId);
+  if (!session) return false;
+  return Date.now() - session.createdAt < SESSION_TTL_MS;
 }
 
-/**
- * Detect if an existing bridge instance is already running in the port range.
- * @returns {Promise<number|null>} The port of the existing instance, or null
- */
-async function findExistingInstance() {
-  for (let port = PORT_START; port <= PORT_END; port++) {
-    if (await isBridgeRunning(port)) return port;
+function cleanupExpiredPairCodes() {
+  const now = Date.now();
+  for (const [code, data] of pairCodeMap) {
+    if (now > data.expiresAt) pairCodeMap.delete(code);
   }
-  return null;
 }
 
-/**
- * Find the first available port in range.
- * @returns {Promise<number>}
- */
-async function findAvailablePort() {
-  for (let port = PORT_START; port <= PORT_END; port++) {
-    const inUse = await isPortInUse(port);
-    if (!inUse) return port;
-  }
-  throw new Error(`All ports in range ${PORT_START}-${PORT_END} are in use`);
+setInterval(cleanupExpiredPairCodes, 60_000);
+
+function requireSession(getSessionId) {
+  return async (c, next) => {
+    const sessionId = getSessionId(c);
+    console.log(`[MIDDLEWARE] sessionId=${sessionId}, valid=${isSessionValid(sessionId)}`);
+    if (!sessionId) {
+      return c.json({ error: 'Missing sessionId' }, 400);
+    }
+    const session = sessionMap.get(sessionId);
+    if (!session) {
+      console.log(`[MIDDLEWARE] Session not found in map, keys:`, [...sessionMap.keys()]);
+    }
+    if (!session || !isSessionValid(sessionId)) {
+      return c.json({ error: 'Invalid session' }, 401);
+    }
+    c.set('session', session);
+    c.set('sessionId', sessionId);
+    return next();
+  };
 }
 
-// ─── HTTP Server (for AI to submit code via HTTP POST) ─────────────
-const httpServer = createServer(async (req, res) => {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const sessionFromHeader = (c) => c.req.header('x-session-id');
+const sessionFromParam = (c) => c.req.param('sessionId');
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
+const app = new Hono();
 
-  // Health check — includes service identifier for client handshake verification
-  if (req.method === 'GET' && req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      service: SERVICE_ID,
-      status: 'ok',
-      edaConnected: edaClients.size > 0,
-      edaWindowCount: edaClients.size,
-      activeWindowId: activeEdaWindowId,
-      pendingRequests: pendingRequests.size,
-      timestamp: Date.now(),
-    }));
-    return;
-  }
-
-  // List all connected EDA windows
-  if (req.method === 'GET' && req.url === '/eda-windows') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    const windows = [];
-    for (const [windowId, ws] of edaClients) {
-      windows.push({
-        windowId,
-        connected: ws.readyState === 1,
-        active: windowId === activeEdaWindowId,
-      });
-    }
-    res.end(JSON.stringify({
-      windows,
-      activeWindowId: activeEdaWindowId,
-      count: edaClients.size,
-    }));
-    return;
-  }
-
-  // Set active EDA window
-  if (req.method === 'POST' && req.url === '/eda-windows/select') {
-    let body = '';
-    for await (const chunk of req) body += chunk;
-    try {
-      const payload = JSON.parse(body);
-      const { windowId } = payload;
-      if (!edaClients.has(windowId)) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: `EDA window "${windowId}" not found` }));
-        return;
-      }
-      activeEdaWindowId = windowId;
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, activeWindowId }));
-      return;
-    }
-    catch (err) {
-      console.error('[HTTP] /eda-windows/select error:', err.message);
-      if (!res.headersSent) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid request body' }));
-      }
-      return;
-    }
-  }
-
-  // Execute code on EDA
-  if (req.method === 'POST' && req.url === '/execute') {
-    let body = '';
-    for await (const chunk of req) body += chunk;
-
-    try {
-      const payload = JSON.parse(body);
-      const code = payload.code;
-      const windowId = payload.windowId; // optional, uses active window if not specified
-      if (!code || typeof code !== 'string') {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing "code" field (string)' }));
-        return;
-      }
-
-      const result = await executeOnEda(code, windowId);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, result, windowId: windowId || activeEdaWindowId }));
-    } catch (err) {
-      const status = err.message?.includes('not connected') ? 503 : 500;
-      res.writeHead(status, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: false, error: err.message }));
-    }
-    return;
-  }
-
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
+app.use('*', async (c, next) => {
+  c.res.headers.set('Access-Control-Allow-Origin', '*');
+  c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  c.res.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-Session-Id');
+  await next();
 });
 
-// ─── WebSocket Server ───────────────────────────────────────────────
-const wss = new WebSocketServer({ server: httpServer });
+app.options('*', (c) => c.text('', 204));
 
-wss.on('connection', (ws, req) => {
-  const clientType = req.url === '/eda' ? 'eda' : 'agent';
-  console.log(`[WS] New ${clientType} connection from ${req.socket.remoteAddress}`);
-
-  // Send handshake message for client verification
-  ws.send(JSON.stringify({
-    type: 'handshake',
+app.get('/health', (c) => {
+  return c.json({
     service: SERVICE_ID,
-    clientType,
+    status: 'ok',
+    sessions: sessionMap.size,
     timestamp: Date.now(),
-  }));
-
-  if (clientType === 'eda') {
-    let registeredWindowId = null;
-
-    ws.on('message', (raw) => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === 'register' && msg.windowId) {
-          // EDA client registering with window ID
-          registeredWindowId = msg.windowId;
-          edaClients.set(registeredWindowId, ws);
-          // Auto-select if first window or if no active window
-          if (edaClients.size === 1 || !activeEdaWindowId) {
-            activeEdaWindowId = registeredWindowId;
-          }
-          console.log(`[WS] EDA window registered: ${registeredWindowId}, total: ${edaClients.size}`);
-          return;
-        }
-        // Always pass a valid windowId (use registeredWindowId if available, otherwise log warning)
-        const effectiveWindowId = registeredWindowId || 'unregistered';
-        handleEdaMessage(msg, effectiveWindowId);
-      } catch (err) {
-        console.error('[WS] Failed to parse EDA message:', err.message);
-      }
-    });
-
-    ws.on('close', (code, reason) => {
-      console.log(`[WS] EDA window disconnected: ${registeredWindowId} (${code} ${reason})`);
-      if (registeredWindowId) {
-        edaClients.delete(registeredWindowId);
-        if (activeEdaWindowId === registeredWindowId) {
-          // Select another window if available
-          activeEdaWindowId = edaClients.keys().next().value || null;
-        }
-        // Reject pending requests for this window
-        for (const [id, req] of pendingRequests) {
-          if (req.windowId === registeredWindowId) {
-            clearTimeout(req.timer);
-            req.reject(new Error(`EDA window "${registeredWindowId}" disconnected`));
-            pendingRequests.delete(id);
-          }
-        }
-      }
-    });
-
-    ws.on('error', (err) => {
-      console.error('[WS] EDA client error:', err.message);
-    });
-  } else {
-    // Agent / AI client connection
-    ws.on('message', async (raw) => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === 'execute') {
-          try {
-            const result = await executeOnEda(msg.code, msg.windowId);
-            ws.send(JSON.stringify({
-              type: 'result',
-              id: msg.id,
-              result,
-              timestamp: Date.now(),
-            }));
-          } catch (err) {
-            ws.send(JSON.stringify({
-              type: 'error',
-              id: msg.id,
-              error: err.message,
-              timestamp: Date.now(),
-            }));
-          }
-        } else if (msg.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong', id: msg.id, timestamp: Date.now() }));
-        }
-      } catch (err) {
-        console.error('[WS] Failed to parse agent message:', err.message);
-      }
-    });
-
-    ws.on('close', () => {
-      console.log('[WS] Agent client disconnected');
-    });
-  }
+  });
 });
 
-// ─── Heartbeat: periodic ping to all EDA clients ─────────────────────
-const HEARTBEAT_INTERVAL_MS = 5000;
+app.post('/pairing/request', (c) => {
+  const code = generatePairCode();
+  const sessionId = createSession();
+  const now = Date.now();
 
-setInterval(() => {
-  if (edaClients.size === 0) return;
+  pairCodeMap.set(code, { sessionId, expiresAt: now + PAIR_CODE_TTL_MS });
+
+  return c.json({
+    success: true,
+    code,
+    sessionId,
+    expiresIn: Math.floor(PAIR_CODE_TTL_MS / 1000),
+  });
+});
+
+app.post('/pairing/verify', async (c) => {
+  const { code } = await c.req.json().catch(() => ({}));
+
+  if (!code || typeof code !== 'string') {
+    return c.json({ success: false, error: 'Missing "code" field' }, 400);
+  }
+
+  const pairData = pairCodeMap.get(code);
+  if (!pairData || Date.now() > pairData.expiresAt) {
+    return c.json({ success: false, error: '配对码无效或已过期' }, 400);
+  }
+
+  pairCodeMap.delete(code);
+  const session = sessionMap.get(pairData.sessionId);
+  if (session) {
+    session.lastActive = Date.now();
+    session.paired = true;
+  }
+
+  return c.json({
+    success: true,
+    sessionId: pairData.sessionId,
+  });
+});
+
+app.post('/execute', requireSession(sessionFromHeader), async (c) => {
+  const session = c.get('session');
+  const sessionId = c.get('sessionId');
+  console.log(`[EXECUTE] sessionId=${sessionId}`);
+
+  const { code } = await c.req.json().catch(() => ({}));
+  console.log(`[EXECUTE] code=${code?.substring(0, 50)}`);
   
-  for (const [windowId, ws] of edaClients) {
-    if (ws.readyState === 1) {
-      try {
-        ws.send(JSON.stringify({
-          type: 'ping',
-          id: randomUUID(),
-          timestamp: Date.now(),
-        }));
-        console.log(`[WS] ♥ heartbeat sent to ${windowId}`);
-      } catch (err) {
-        console.error(`[WS] heartbeat failed for ${windowId}:`, err.message);
+  if (!code || typeof code !== 'string') {
+    return c.json({ success: false, error: 'Missing "code" field' }, 400);
+  }
+
+  session.lastActive = Date.now();
+
+  const requestId = randomUUID();
+  console.log(`[EXECUTE] requestId=${requestId}, storing command for EDA to poll...`);
+  pendingCommands.set(sessionId, { requestId, code, timestamp: Date.now() });
+  console.log(`[EXECUTE] pendingCommands:`, [...pendingCommands.entries()]);
+
+  const result = await waitForResult(requestId);
+  console.log(`[EXECUTE] result received:`, result);
+
+  return c.json({
+    success: true,
+    result: result.value,
+    error: result.error,
+    duration: result.duration,
+  });
+});
+
+app.get('/poll/:sessionId', requireSession(sessionFromParam), (c) => {
+  const session = c.get('session');
+  const sessionId = c.get('sessionId');
+
+  const cmd = pendingCommands.get(sessionId);
+  if (cmd) {
+    pendingCommands.delete(sessionId);
+    return c.json(cmd);
+  }
+
+  return c.json({ noCommand: true, paired: session.paired });
+});
+
+app.post('/result', requireSession(sessionFromHeader), async (c) => {
+  const session = c.get('session');
+
+  const { requestId, result, error } = await c.req.json().catch(() => ({}));
+  if (!requestId) {
+    return c.json({ success: false, error: 'Missing requestId' }, 400);
+  }
+
+  console.log(`[RESULT] requestId=${requestId}, result=`, result);
+  session.lastActive = Date.now();
+  pendingResults.set(requestId, { requestId, result, error, timestamp: Date.now() });
+  console.log(`[RESULT] pendingResults:`, [...pendingResults.entries()]);
+
+  return c.json({ success: true });
+});
+
+function waitForResult(requestId) {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const check = setInterval(() => {
+      const res = pendingResults.get(requestId);
+      if (res) {
+        console.log(`[WAIT] Found result for requestId=${requestId}`);
+        clearInterval(check);
+        pendingResults.delete(requestId);
+        resolve({
+          value: res.result,
+          error: res.error,
+          duration: Date.now() - startTime,
+        });
+        return;
       }
-    }
-  }
-}, HEARTBEAT_INTERVAL_MS);
+    }, 100);
 
-// ─── Core logic ─────────────────────────────────────────────────────
-
-/**
- * Send a message to the connected EDA client
- * @param {string} windowId - Target EDA window ID
- * @param {object} msg - Message to send
- */
-function sendToEda(windowId, msg) {
-  const edaClient = edaClients.get(windowId);
-  if (!edaClient) {
-    throw new Error(`EDA window "${windowId}" not found in connected clients`);
-  }
-  if (edaClient.readyState !== 1) {
-    throw new Error(`EDA window "${windowId}" is not in connected state (readyState: ${edaClient.readyState})`);
-  }
-  try {
-    edaClient.send(JSON.stringify(msg));
-  } catch (err) {
-    throw new Error(`Failed to send to EDA window "${windowId}": ${err.message}`);
-  }
-}
-
-/**
- * Execute JavaScript code on the EDA client and return the result
- * @param {string} code - JavaScript code to execute in EDA context
- * @param {string} [windowId] - Specific EDA window ID (uses active window if not specified)
- * @returns {Promise<any>}
- */
-function executeOnEda(code, windowId) {
-  return new Promise((resolve, reject) => {
-    const targetWindowId = windowId || activeEdaWindowId;
-
-    if (!targetWindowId) {
-      reject(new Error('No EDA window connected. Please connect an EDA window first.'));
-      return;
-    }
-
-    if (!edaClients.has(targetWindowId) || edaClients.get(targetWindowId).readyState !== 1) {
-      reject(new Error(`EDA window "${targetWindowId}" is no longer connected. Please select another window.`));
-      return;
-    }
-
-    const id = randomUUID();
-    const timer = setTimeout(() => {
-      pendingRequests.delete(id);
-      reject(new Error(`Request ${id} timed out after ${REQUEST_TIMEOUT_MS}ms`));
-    }, REQUEST_TIMEOUT_MS);
-
-    pendingRequests.set(id, { resolve, reject, timer, windowId: targetWindowId });
-
-    try {
-      sendToEda(targetWindowId, {
-        type: 'execute',
-        id,
-        code,
-        windowId: targetWindowId,
-        timestamp: Date.now(),
-      });
-    } catch (err) {
-      clearTimeout(timer);
-      pendingRequests.delete(id);
-      reject(err);
-    }
+    setTimeout(() => {
+      clearInterval(check);
+      console.log(`[WAIT] Timeout for requestId=${requestId}`);
+      resolve({ value: null, error: 'Timeout waiting for result', duration: Date.now() - startTime });
+    }, 30000);
   });
 }
 
-/**
- * Handle messages received from EDA client
- * @param {object} msg - Message from EDA
- * @param {string} windowId - EDA window ID that sent the message
- */
-function handleEdaMessage(msg, windowId) {
-  if (msg.type === 'ping') {
-    console.log(`[WS] Ping received from ${windowId}, sending pong`);
-    const edaClient = edaClients.get(windowId);
-    if (edaClient && edaClient.readyState === 1) {
-      try {
-        edaClient.send(JSON.stringify({
-          type: 'pong',
-          id: msg.id,
-          timestamp: Date.now(),
-        }));
-      } catch (err) {
-        console.error(`[WS] Failed to send pong to ${windowId}:`, err.message);
-      }
-    } else {
-      console.warn(`[WS] Cannot send pong: window ${windowId} not found or disconnected`);
-    }
-    return;
-  }
+console.log(`Starting server on port ${PORT}...`);
 
-  if (msg.type === 'pong') {
-    console.log('[EDA] Pong received from window', windowId, '- connection healthy');
-    return;
-  }
-
-  if (msg.type === 'result' || msg.type === 'error') {
-    const pending = pendingRequests.get(msg.id);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pendingRequests.delete(msg.id);
-      if (msg.type === 'result') {
-        pending.resolve(msg.result);
-      } else {
-        pending.reject(new Error(msg.error || 'Unknown EDA error'));
-      }
-    }
-    return;
-  }
-
-  console.log('[EDA] Unknown message type:', msg.type, 'from window:', windowId);
-}
-
-// ─── Start ──────────────────────────────────────────────────────────
-async function start() {
-  try {
-    // ── Singleton check: exit if an identical bridge is already running ──
-    const existingPort = await findExistingInstance();
-    if (existingPort) {
-      console.log(`✅ Bridge server is already running on port ${existingPort}, no need to start another instance.`);
-      process.exit(0);
-    }
-
-    const port = await findAvailablePort();
-
-    httpServer.listen(port, () => {
-      console.log(`
+serve({
+  fetch: app.fetch,
+  port: PORT,
+}, (info) => {
+  console.log(`
 ╔══════════════════════════════════════════════════════════════╗
-║         EasyEDA WebSocket Bridge Server                      ║
+║         EasyEDA Bridge Server - 6位配对码 (HTTP Only)       ║
 ╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  Port:        ${port}                                          ║
-║  Port Range:  ${PORT_START}-${PORT_END}                                  ║
+║  Port:        ${PORT}                                          ║
 ║  Service ID:  ${SERVICE_ID}                              ║
-║                                                              ║
-║  HTTP API:    http://localhost:${port}                         ║
-║  WS (EDA):   ws://localhost:${port}/eda                       ║
-║  WS (Agent): ws://localhost:${port}/agent                     ║
-║                                                              ║
-║  Endpoints:                                                  ║
-║    GET  /health     - 健康检查 & EDA 连接状态                ║
-║    POST /execute    - 执行代码 {"code": "..."}               ║
-║                                                              ║
-║  Handshake:                                                  ║
-║    /health returns { service: "${SERVICE_ID}" }       ║
-║    WS sends { type: "handshake", service: "..." }            ║
-║                                                              ║
+╠══════════════════════════════════════════════════════════════╣
+║  HTTP Endpoints:                                             ║
+║    POST /pairing/request - 请求配对码 (EDA调用)                ║
+║    POST /pairing/verify  - 验证配对码 (Agent调用)             ║
+║    POST /execute         - 执行代码 (Agent调用)               ║
+║    GET  /poll/:sessionId - EDA轮询命令                        ║
+║    POST /result          - EDA提交结果                        ║
 ╚══════════════════════════════════════════════════════════════╝
-      `);
-    });
-
-    httpServer.on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${port} became occupied. Restarting...`);
-        httpServer.close();
-        start(); // Retry
-      } else {
-        throw err;
-      }
-    });
-  } catch (err) {
-    console.error(`❌ ${err.message}`);
-    process.exit(1);
-  }
-}
-
-start();
+  `);
+});

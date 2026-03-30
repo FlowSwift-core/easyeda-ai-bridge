@@ -1,25 +1,43 @@
 import * as extensionConfig from '../extension.json';
 
-const DEFAULT_BRIDGE_URL = 'ws://localhost:49620/eda';
-const STORAGE_KEY = 'easyeda_bridge_url';
-const SOCKET_ID = 'easyeda-ai-bridge-socket';
+const DEFAULT_BRIDGE_URL = 'http://localhost:49620';
+const STORAGE_KEY_SESSION = 'easyeda_ai_session_id';
 const MESSAGE_BUS_CHANNEL = 'easyeda-ai-bridge-status';
 const MESSAGE_BUS_EVENTS = 'easyeda-ai-bridge-events';
 const RPC_SERVICE_NAME = 'ai-bridge-status';
 
-let windowId = '';
+let sessionId = '';
 let connected = false;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-const RECONNECT_INTERVAL_MS = 3000;
+let pairingCode = '';
+let pairingExpiresAt = 0;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function getStored(key: string, def = ''): string {
+  try {
+    const val = eda.sys_Storage.getExtensionUserConfig(key);
+    return typeof val === 'string' ? val.trim() : def;
+  } catch {}
+  return def;
+}
+
+function setStored(key: string, val: string): void {
+  try { eda.sys_Storage.setExtensionUserConfig(key, val); } catch {}
+}
 
 function getBridgeUrl(): string {
-  try {
-    const saved = eda.sys_Storage.getExtensionUserConfig(STORAGE_KEY);
-    if (typeof saved === 'string' && saved.trim().length > 0) {
-      return saved.trim();
-    }
-  } catch {}
-  return DEFAULT_BRIDGE_URL;
+  return getStored('easyeda_bridge_url', DEFAULT_BRIDGE_URL);
+}
+
+function getSessionId(): string {
+  return getStored(STORAGE_KEY_SESSION, '');
+}
+
+function saveSessionId(id: string): void {
+  setStored(STORAGE_KEY_SESSION, id);
+}
+
+function clearSessionId(): void {
+  setStored(STORAGE_KEY_SESSION, '');
 }
 
 function toSafeErrorMessage(error: unknown): string {
@@ -35,30 +53,22 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   }
 }
 
-function broadcastStatus(connected: boolean): void {
+function broadcast(channel: string, payload: object): void {
   try {
     setTimeout(() => {
-      eda.sys_MessageBus.publishPublic(MESSAGE_BUS_CHANNEL, {
-        connected,
-        windowId,
-        timestamp: Date.now(),
-      });
-    }, 100);
+      eda.sys_MessageBus.publishPublic(channel, { ...payload, timestamp: Date.now() });
+    }, channel === MESSAGE_BUS_CHANNEL ? 100 : 0);
   } catch (err) {
     console.log('[AI Bridge] Broadcast error:', err);
   }
 }
 
+function broadcastStatus(data: { connected: boolean; sessionId?: string; pairingCode?: string }): void {
+  broadcast(MESSAGE_BUS_CHANNEL, data);
+}
+
 function broadcastEvent(type: string, data: unknown): void {
-  try {
-    eda.sys_MessageBus.publishPublic(MESSAGE_BUS_EVENTS, {
-      type,
-      data,
-      timestamp: Date.now(),
-    });
-  } catch (err) {
-    console.log('[AI Bridge] Event broadcast error:', err);
-  }
+  broadcast(MESSAGE_BUS_EVENTS, { type, data });
 }
 
 function toSerializable(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
@@ -97,168 +107,172 @@ async function executeCode(code: string): Promise<unknown> {
   return toSerializable(result);
 }
 
-function sendToBridge(msg: unknown): void {
-  try {
-    eda.sys_WebSocket.send(SOCKET_ID, JSON.stringify(msg));
-  } catch (err) {
-    console.error('[AI Bridge] Send error:', toSafeErrorMessage(err));
-    connected = false;
+async function httpRequest(method: string, path: string, body?: object): Promise<unknown> {
+  const url = `${getBridgeUrl()}${path}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (sessionId) {
+    headers['X-Session-Id'] = sessionId;
   }
+
+  const response = await eda.sys_ClientUrl.request(
+    url,
+    method as any,
+    body ? JSON.stringify(body) : undefined,
+    { headers }
+  );
+
+  if (!response.ok) {
+    const msg = response.status === 401 ? 'Unauthorized' : `HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+
+  const text = await response.text();
+  return text ? JSON.parse(text) : {};
 }
 
-function scheduleReconnect(): void {
-  if (reconnectTimer) return;
-  console.log(`[AI Bridge] Scheduling reconnect in ${RECONNECT_INTERVAL_MS}ms...`);
-  showToast('AI Bridge: 连接断开，3秒后重新连接...', 'error');
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connectToBridge();
-  }, RECONNECT_INTERVAL_MS);
-}
-
-function disconnect(): void {
+function stopPolling(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
   connected = false;
-  broadcastStatus(false);
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  try {
-    eda.sys_WebSocket.close(SOCKET_ID, 1000, 'disconnect');
-  } catch {}
 }
 
-function connectToBridge(): void {
-  disconnect();
+function disconnectBridge(): void {
+  stopPolling();
+  broadcastStatus({ connected: false, sessionId });
+}
+
+async function requestPairingCode(): Promise<void> {
+  stopPolling();
+  clearSessionId();
+  sessionId = '';
+  pairingCode = '';
+  connected = false;
   
-  const url = getBridgeUrl();
-  console.log(`[AI Bridge] Connecting to ${url}...`);
-  showToast('AI Bridge: 正在连接...', 'info');
-
-  windowId = `bridge_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
   try {
-    eda.sys_WebSocket.register(
-      SOCKET_ID,
-      url,
-      (event: MessageEvent) => {
-        try {
-          const msg = JSON.parse(event.data);
-          console.log('[AI Bridge] Received:', msg.type);
-
-          if (msg.type === 'handshake') {
-            console.log('[AI Bridge] Handshake received, sending register...');
-            connected = true;
-            broadcastStatus(true);
-            sendToBridge({
-              type: 'register',
-              windowId,
-            });
-            showToast('AI Bridge: 已连接', 'success');
-            return;
-          }
-
-          if (msg.type === 'execute' && msg.code) {
-            const code = msg.code;
-            const id = msg.id;
-            
-            broadcastEvent('execute', { id, code });
-            
-            const startTime = Date.now();
-            executeCode(code)
-              .then(result => {
-                const duration = Date.now() - startTime;
-                broadcastEvent('result', { id, result, duration });
-                sendToBridge({
-                  type: 'result',
-                  id,
-                  result,
-                  timestamp: Date.now(),
-                });
-              })
-              .catch(error => {
-                const duration = Date.now() - startTime;
-                broadcastEvent('error', { id, error: toSafeErrorMessage(error), duration });
-                sendToBridge({
-                  type: 'error',
-                  id,
-                  error: toSafeErrorMessage(error),
-                  timestamp: Date.now(),
-                });
-              });
-            return;
-          }
-
-          if (msg.type === 'ping') {
-            sendToBridge({ type: 'pong', id: msg.id, timestamp: Date.now() });
-            return;
-          }
-
-        } catch (err) {
-          console.error('[AI Bridge] Message parse error:', err);
-        }
-      },
-      () => {
-        console.log('[AI Bridge] WebSocket connected');
-      },
-    );
+    const result = await httpRequest('POST', '/pairing/request') as any;
+    if (result.success) {
+      pairingCode = result.code;
+      sessionId = result.sessionId;
+      pairingExpiresAt = Date.now() + result.expiresIn * 1000;
+      saveSessionId(sessionId);
+      showToast(`配对码: ${pairingCode}`, 'info');
+      broadcastStatus({ connected: false, sessionId, pairingCode });
+      startEdaPolling();
+    }
   } catch (err) {
-    console.error('[AI Bridge] Connection error:', toSafeErrorMessage(err));
-    scheduleReconnect();
+    console.error('[AI Bridge] Request pairing failed:', err);
+    showToast('请求配对码失败', 'error');
+  }
+}
+
+async function pollCommands(): Promise<void> {
+  if (!sessionId) return;
+
+  if (pairingCode && Date.now() > pairingExpiresAt) {
+    showToast('配对码已过期', 'error');
+    stopPolling();
+    pairingCode = '';
+    sessionId = '';
+    clearSessionId();
+    broadcastStatus({ connected: false, sessionId: '' });
+    return;
   }
 
-  // Check connection status periodically
-  setTimeout(() => {
-    if (!connected) {
-      console.log('[AI Bridge] Connection not established, scheduling reconnect...');
-      disconnect();
-      scheduleReconnect();
+  try {
+    console.log(`[POLL] sessionId=${sessionId}, polling...`);
+    const result = await httpRequest('GET', `/poll/${sessionId}`) as any;
+    console.log(`[POLL] result:`, result);
+
+    if (!connected && pairingCode && result.paired) {
+      connected = true;
+      pairingCode = '';
+      showToast('配对成功!', 'success');
+      broadcastStatus({ connected, sessionId });
     }
-  }, 5000);
+
+    if (result.requestId && result.code) {
+      console.log(`[POLL] Got command id=${result.requestId}, code=${result.code.substring(0, 30)}`);
+      const startTime = Date.now();
+      const id = result.requestId;
+      const code = result.code;
+
+      broadcastEvent('execute', { id, code });
+
+      try {
+        console.log(`[POLL] Executing code...`);
+        const execResult = await executeCode(code);
+        const duration = Date.now() - startTime;
+        console.log(`[POLL] Execution done, result:`, execResult);
+        broadcastEvent('result', { id, result: execResult, duration });
+
+        console.log(`[POLL] Submitting result...`);
+        await httpRequest('POST', '/result', { requestId: id, result: execResult });
+        console.log(`[POLL] Result submitted`);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        const errorMsg = toSafeErrorMessage(error);
+        console.log(`[POLL] Execution error:`, errorMsg);
+        broadcastEvent('error', { id, error: errorMsg, duration });
+
+        console.log(`[POLL] Submitting error result...`);
+        await httpRequest('POST', '/result', { requestId: id, error: errorMsg });
+      }
+    }
+  } catch (err: any) {
+    console.error('[AI Bridge] Poll error:', err);
+    if (err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
+      console.log('[POLL] Session invalid, clearing...');
+      stopPolling();
+      clearSessionId();
+      sessionId = '';
+      showToast('会话已失效，请重新请求配对码', 'error');
+      broadcastStatus({ connected: false, sessionId: '' });
+    }
+  }
+}
+
+function startEdaPolling(): void {
+  if (pollTimer) return;
+
+  pollTimer = setInterval(() => {
+    pollCommands();
+  }, 1000);
 }
 
 export async function activate(status?: 'onStartupFinished', arg?: string): Promise<void> {
-  console.log('[AI Bridge] Activating RPC service...');
+  console.log('[AI Bridge] === ACTIVATE START ===');
+  console.log('[AI Bridge] Activating...');
   showToast('AI Bridge: 启动中...', 'info');
-  
-  // Register RPC service for iframe to query status
-  eda.sys_MessageBus.rpcServicePublic(RPC_SERVICE_NAME, () => {
-    return { connected, windowId };
+
+  sessionId = getSessionId();
+
+  eda.sys_MessageBus.rpcServicePublic(RPC_SERVICE_NAME, (action?: string) => {
+    if (action === 'requestPairing') {
+      requestPairingCode();
+      return { success: true };
+    }
+    if (action === 'disconnect') {
+      disconnectBridge();
+      return { success: true };
+    }
+    return { connected, sessionId, pairingCode };
   });
-  
-  // Initial connection after a short delay
+
   setTimeout(() => {
-    connectToBridge();
-  }, 1500);
-
-  // Heartbeat
-  setInterval(() => {
-    if (!connected) return;
-    try {
-      sendToBridge({
-        type: 'ping',
-        id: `heartbeat_${Date.now()}`,
-        timestamp: Date.now(),
-      });
-    } catch {
-      connected = false;
-      scheduleReconnect();
+    if (sessionId) {
+      startEdaPolling();
     }
-  }, 5000);
-
-  // Periodic connection check
-  setInterval(() => {
-    if (!connected) {
-      console.log('[AI Bridge] Not connected, attempting to reconnect...');
-      disconnect();
-      scheduleReconnect();
-    }
-  }, 10000);
+  }, 2000);
 }
 
 export function about(): void {
   eda.sys_Dialog.showInformationMessage(
-    `EasyEDA AI Bridge v${extensionConfig.version}\nConnecting AI Agents to your EDA workspace.`,
+    `EasyEDA AI Bridge v${extensionConfig.version}\n6位配对码方案\n连接AI Agents到你的EDA工作区`,
     'About AI Bridge',
   );
 }

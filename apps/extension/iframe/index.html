@@ -10,7 +10,7 @@
         body { 
             font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
             font-size: 12px;
-            background: rgba(13, 17, 23, 0.85);
+            background: rgba(13, 17, 23, 0.95);
             color: #c9d1d9;
             margin: 0;
             padding: 16px;
@@ -18,96 +18,178 @@
         .status {
             font-size: 14px;
             margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .status.connected { color: #3fb950; }
         .status.disconnected { color: #f85149; }
-        .log {
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f85149;
+        }
+        .status.connected .status-dot { background: #3fb950; }
+        
+        .panel {
+            background: rgba(33, 38, 45, 0.8);
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .panel-title {
             font-size: 11px;
             color: #8b949e;
-            max-height: 300px;
-            overflow-y: auto;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .info-label { color: #8b949e; }
+        .info-value { color: #c9d1d9; font-family: monospace; }
+        
+        .pairing-code {
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            color: #58a6ff;
+            letter-spacing: 8px;
+            margin: 16px 0;
+            padding: 16px;
+            background: rgba(88, 166, 255, 0.1);
+            border-radius: 8px;
+            border: 1px dashed #58a6ff;
+        }
+        
         button {
             background: #238636;
             color: white;
             border: none;
-            padding: 6px 12px;
+            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 11px;
-            margin-right: 8px;
         }
         button:hover { background: #2ea043; }
+        
+        .log {
+            font-size: 11px;
+            color: #8b949e;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .log-entry { margin-bottom: 4px; }
     </style>
 </head>
 <body>
-    <div class="status disconnected" id="status">○ disconnected</div>
-    <div style="margin-bottom: 12px;">
-        <button onclick="queryStatus()">Query Status</button>
+    <div class="panel">
+        <div class="panel-title">连接状态</div>
+        <div class="status disconnected" id="status">
+            <span class="status-dot"></span>
+            <span id="statusText">○ disconnected</span>
+        </div>
     </div>
-    <div class="log" id="log"></div>
+
+    <div class="panel">
+        <div class="panel-title">会话信息</div>
+        <div class="info-row">
+            <span class="info-label">Session ID:</span>
+            <span class="info-value" id="sessionId">-</span>
+        </div>
+    </div>
+
+    <div class="panel" id="pairingPanel" style="display:none;">
+        <div class="panel-title">配对码</div>
+        <div class="pairing-code" id="pairingCode">------</div>
+    </div>
+
+    <button onclick="requestPairing()">请求配对码</button>
+    <button onclick="disconnect()" style="background:#f85149;margin-left:8px;">断开连接</button>
+
+    <div class="panel">
+        <div class="log" id="log"></div>
+    </div>
 
     <script>
-        const log = document.getElementById('log');
-        const status = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const statusEl = document.getElementById('status');
+        const statusTextEl = document.getElementById('statusText');
+        const sessionIdEl = document.getElementById('sessionId');
+        const pairingPanel = document.getElementById('pairingPanel');
+        const pairingCodeEl = document.getElementById('pairingCode');
         
         function addLog(msg) {
             const div = document.createElement('div');
+            div.className = 'log-entry';
             div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-            log.appendChild(div);
-            log.scrollTop = log.scrollHeight;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
         }
 
-        function updateStatus(connected) {
-            if (connected) {
-                status.textContent = '● connected';
-                status.className = 'status connected';
+        function updateStatus(data) {
+            if (data.connected) {
+                statusEl.className = 'status connected';
+                statusTextEl.textContent = '● connected';
             } else {
-                status.textContent = '○ disconnected';
-                status.className = 'status disconnected';
+                statusEl.className = 'status disconnected';
+                statusTextEl.textContent = '○ disconnected';
+            }
+            
+            sessionIdEl.textContent = data.sessionId ? data.sessionId : '-';
+            
+            if (data.pairingCode) {
+                pairingPanel.style.display = 'block';
+                pairingCodeEl.textContent = data.pairingCode;
+                addLog('配对码: ' + data.pairingCode);
+            } else {
+                pairingPanel.style.display = 'none';
             }
         }
 
-        // Subscribe to events from main process
-        function subscribeEvents() {
-            try {
-                eda.sys_MessageBus.subscribePublic('easyeda-ai-bridge-events', (msg) => {
-                    if (msg.type === 'execute') {
-                        addLog('→ EXECUTE: ' + msg.data.code.substring(0, 80) + (msg.data.code.length > 80 ? '...' : ''));
-                    } else if (msg.type === 'result') {
-                        const resultStr = JSON.stringify(msg.data.result);
-                        addLog('← RESULT (' + msg.data.duration + 'ms): ' + resultStr.substring(0, 100) + (resultStr.length > 100 ? '...' : ''));
-                    } else if (msg.type === 'error') {
-                        addLog('✕ ERROR (' + msg.data.duration + 'ms): ' + msg.data.error);
-                    }
-                });
-                addLog('Subscribed to events');
-            } catch(e) {
-                addLog('Subscribe error: ' + e.message);
-            }
-        }
-
-        // Call main extension RPC service to get status
         async function queryStatus() {
             try {
                 const result = await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status');
                 if (result) {
-                    updateStatus(result.connected);
-                    if (result.windowId) {
-                        addLog('Window ID: ' + result.windowId);
-                    }
+                    updateStatus(result);
                 }
             } catch(e) {
                 addLog('RPC error: ' + e.message);
             }
         }
 
-        // Poll status every 2 seconds
+        async function requestPairing() {
+            addLog('请求配对码...');
+            try {
+                await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'requestPairing');
+                setTimeout(queryStatus, 500);
+            } catch(e) {
+                addLog('请求失败: ' + e.message);
+            }
+        }
+
+        async function disconnect() {
+            addLog('断开连接...');
+            try {
+                await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'disconnect');
+                setTimeout(queryStatus, 500);
+            } catch(e) {
+                addLog('断开失败: ' + e.message);
+            }
+        }
+
         function init() {
             addLog('IFrame loaded');
-            subscribeEvents();
             queryStatus();
-            setInterval(queryStatus, 10000);
+            setInterval(queryStatus, 2000);
         }
 
         if (window.eda) {
