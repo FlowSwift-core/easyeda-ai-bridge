@@ -4,199 +4,356 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Bridge</title>
-    <link rel="stylesheet" href="/dist/styles.css">
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
-            font-size: 12px;
-            background: rgba(13, 17, 23, 0.95);
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            background: #0d1117;
             color: #c9d1d9;
-            margin: 0;
             padding: 16px;
+            min-height: 100vh;
         }
-        .status {
-            font-size: 14px;
-            margin-bottom: 12px;
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #21262d;
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .header .version {
+            font-size: 11px;
+            color: #6e7681;
+        }
+        
+        .status-bar {
             display: flex;
             align-items: center;
             gap: 8px;
+            padding: 12px 16px;
+            background: #161b22;
+            border-radius: 8px;
+            margin-bottom: 16px;
         }
-        .status.connected { color: #3fb950; }
-        .status.disconnected { color: #f85149; }
         .status-dot {
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: #f85149;
+            background: #6e7681;
+            flex-shrink: 0;
         }
-        .status.connected .status-dot { background: #3fb950; }
+        .status-bar.paired .status-dot { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+        .status-bar.pending .status-dot { background: #f0883e; }
+        .status-bar.error .status-dot { background: #f85149; }
+        .status-text {
+            flex: 1;
+            font-weight: 500;
+        }
+        .status-bar.paired .status-text { color: #3fb950; }
+        .status-bar.pending .status-text { color: #f0883e; }
+        .status-bar.error .status-text { color: #f85149; }
         
-        .panel {
-            background: rgba(33, 38, 45, 0.8);
-            border: 1px solid #30363d;
-            border-radius: 6px;
-            padding: 12px;
+        .card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .card-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6e7681;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 12px;
         }
         
-        .panel-title {
-            font-size: 11px;
-            color: #8b949e;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
+        .info-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 16px;
+        }
+        .info-label { color: #6e7681; }
+        .info-value { 
+            color: #c9d1d9; 
+            font-family: "SF Mono", Monaco, monospace;
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-        .info-label { color: #8b949e; }
-        .info-value { color: #c9d1d9; font-family: monospace; }
-        
-        .pairing-code {
-            font-size: 32px;
-            font-weight: bold;
+        .pairing-section {
             text-align: center;
+            padding: 20px;
+        }
+        .pairing-code {
+            font-size: 40px;
+            font-weight: 700;
             color: #58a6ff;
-            letter-spacing: 8px;
+            letter-spacing: 12px;
+            font-family: "SF Mono", Monaco, monospace;
             margin: 16px 0;
-            padding: 16px;
+            padding: 20px;
             background: rgba(88, 166, 255, 0.1);
-            border-radius: 8px;
+            border-radius: 12px;
             border: 1px dashed #58a6ff;
         }
-        
-        button {
-            background: #238636;
-            color: white;
-            border: none;
-            padding: 8px 16px;
+        .pairing-hint {
+            font-size: 12px;
+            color: #6e7681;
+            margin-bottom: 16px;
+        }
+        .url-link {
+            font-size: 11px;
+            color: #58a6ff;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            padding: 8px 12px;
+            background: rgba(88, 166, 255, 0.05);
             border-radius: 4px;
+            margin-top: 8px;
             cursor: pointer;
-            font-size: 11px;
         }
-        button:hover { background: #2ea043; }
         
-        .log {
-            font-size: 11px;
-            color: #8b949e;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
         }
-        .log-entry { margin-bottom: 4px; }
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #238636;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-danger {
+            background: #21262d;
+            color: #f85149;
+            border: 1px solid #30363d;
+        }
+        .btn-danger:hover { background: #30363d; }
+        .btn-secondary {
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+        }
+        .btn-secondary:hover { background: #30363d; }
+        
+        .log-container {
+            overflow-x: hidden;
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 11px;
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #21262d;
+            color: #8b949e;
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        .log-entry:last-child { border-bottom: none; }
+        .log-entry.success { color: #3fb950; }
+        .log-entry.error { color: #f85149; }
+        .log-entry.info { color: #58a6ff; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 24px;
+            color: #6e7681;
+        }
     </style>
 </head>
 <body>
-    <div class="panel">
-        <div class="panel-title">连接状态</div>
-        <div class="status disconnected" id="status">
-            <span class="status-dot"></span>
-            <span id="statusText">○ disconnected</span>
-        </div>
+    <div class="header">
+        <h1>EasyEDA AI Bridge</h1>
+        <span class="version">v1.0</span>
     </div>
-
-    <div class="panel">
-        <div class="panel-title">会话信息</div>
-        <div class="info-row">
+    
+    <div class="status-bar pending" id="statusBar">
+        <span class="status-dot"></span>
+        <span class="status-text" id="statusText">等待配对</span>
+    </div>
+    
+    <div class="card">
+        <div class="card-title">会话信息</div>
+        <div class="info-grid" id="sessionInfo">
             <span class="info-label">Session ID:</span>
             <span class="info-value" id="sessionId">-</span>
         </div>
     </div>
-
-    <div class="panel" id="pairingPanel" style="display:none;">
-        <div class="panel-title">配对码</div>
-        <div class="pairing-code" id="pairingCode">------</div>
+    
+    <div class="card" id="pairingCard" style="display:none;">
+        <div class="pairing-section">
+            <div class="card-title">配对码</div>
+            <div class="pairing-code" id="pairingCode">------</div>
+            <div class="pairing-hint">在 Agent 端输入配对码完成配对</div>
+            <button class="btn btn-secondary" onclick="copyCode()">复制配对码</button>
+            <div id="urlContainer" style="display:none;">
+                <div class="card-title" style="margin-top:16px;">Agent 连接链接</div>
+                <div class="url-link" id="urlLink" onclick="openUrl()" style="display:block;margin-bottom:8px;"></div>
+                <button class="btn btn-secondary" onclick="openUrl()">打开配对页面</button>
+                <button class="btn btn-secondary" onclick="copyUrl()" style="margin-left:8px;">复制链接</button>
+            </div>
+        </div>
     </div>
-
-    <button onclick="requestPairing()">请求配对码</button>
-    <button onclick="disconnect()" style="background:#f85149;margin-left:8px;">断开连接</button>
-
-    <div class="panel">
-        <div class="log" id="log"></div>
+    
+    <div class="btn-row">
+        <button class="btn btn-primary" onclick="requestPairing()">请求配对码</button>
+        <button class="btn btn-danger" onclick="disconnect()">断开连接</button>
+    </div>
+    
+    <div class="card" style="margin-top:12px;">
+        <div class="card-title">日志</div>
+        <div class="log-container" id="log"></div>
     </div>
 
     <script>
         const logEl = document.getElementById('log');
-        const statusEl = document.getElementById('status');
-        const statusTextEl = document.getElementById('statusText');
+        const statusBar = document.getElementById('statusBar');
+        const statusText = document.getElementById('statusText');
         const sessionIdEl = document.getElementById('sessionId');
-        const pairingPanel = document.getElementById('pairingPanel');
+        const pairingCard = document.getElementById('pairingCard');
         const pairingCodeEl = document.getElementById('pairingCode');
+        const urlContainer = document.getElementById('urlContainer');
+        const urlLink = document.getElementById('urlLink');
         
-        function addLog(msg) {
+        let lastPairingCode = '';
+        
+        function addLog(msg, type = '') {
             const div = document.createElement('div');
-            div.className = 'log-entry';
-            div.textContent = new Date().toLocaleTimeString() + ' ' + msg;
-            logEl.appendChild(div);
-            logEl.scrollTop = logEl.scrollHeight;
+            div.className = 'log-entry ' + type;
+            div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+            logEl.insertBefore(div, logEl.firstChild);
+            while (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
         }
-
+        
         function updateStatus(data) {
-            if (data.connected) {
-                statusEl.className = 'status connected';
-                statusTextEl.textContent = '● connected';
-            } else {
-                statusEl.className = 'status disconnected';
-                statusTextEl.textContent = '○ disconnected';
+            let status = 'pending';
+            let text = '等待配对';
+            
+            if (data.paired === true) {
+                status = 'paired';
+                text = '已配对';
+            } else if (data.connectionError) {
+                status = 'error';
+                text = '连接失败';
             }
+            
+            statusBar.className = 'status-bar ' + status;
+            statusText.textContent = text;
             
             sessionIdEl.textContent = data.sessionId ? data.sessionId : '-';
             
-            if (data.pairingCode) {
-                pairingPanel.style.display = 'block';
-                pairingCodeEl.textContent = data.pairingCode;
-                addLog('配对码: ' + data.pairingCode);
-            } else {
-                pairingPanel.style.display = 'none';
+            const newCode = data.pairingCode || '';
+            if (newCode && newCode !== lastPairingCode) {
+                lastPairingCode = newCode;
+                pairingCard.style.display = 'block';
+                pairingCodeEl.textContent = newCode;
+                addLog('配对码: ' + newCode, 'info');
+                if (data.url) {
+                    urlContainer.style.display = 'block';
+                    urlLink.textContent = data.url;
+                    addLog('连接链接已生成', 'info');
+                }
+            } else if (!newCode && lastPairingCode) {
+                lastPairingCode = '';
+                pairingCard.style.display = 'none';
+                urlContainer.style.display = 'none';
             }
         }
-
+        
         async function queryStatus() {
             try {
                 const result = await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status');
-                if (result) {
-                    updateStatus(result);
-                }
+                if (result) updateStatus(result);
             } catch(e) {
-                addLog('RPC error: ' + e.message);
+                addLog('RPC错误: ' + e.message, 'error');
             }
         }
-
+        
         async function requestPairing() {
-            addLog('请求配对码...');
+            addLog('请求配对码...', 'info');
             try {
                 await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'requestPairing');
                 setTimeout(queryStatus, 500);
             } catch(e) {
-                addLog('请求失败: ' + e.message);
+                addLog('请求失败: ' + e.message, 'error');
             }
         }
-
+        
         async function disconnect() {
-            addLog('断开连接...');
+            addLog('断开连接...', 'info');
             try {
                 await eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'disconnect');
                 setTimeout(queryStatus, 500);
             } catch(e) {
-                addLog('断开失败: ' + e.message);
+                addLog('断开失败: ' + e.message, 'error');
             }
         }
-
+        
+        async function copyCode() {
+            try {
+                await navigator.clipboard.writeText(lastPairingCode);
+                addLog('配对码已复制', 'success');
+            } catch(e) {
+                addLog('复制失败: ' + e.message, 'error');
+            }
+        }
+        
+        async function copyUrl() {
+            try {
+                await navigator.clipboard.writeText(urlLink.textContent);
+                addLog('链接已复制', 'success');
+            } catch(e) {
+                addLog('复制失败: ' + e.message, 'error');
+            }
+        }
+        
+        async function openUrl() {
+            try {
+                await eda.sys_ClientUrl.openUrl(urlLink.textContent);
+                addLog('已打开链接', 'success');
+            } catch(e) {
+                addLog('打开失败: ' + e.message, 'error');
+            }
+        }
+        
         function init() {
-            addLog('IFrame loaded');
+            addLog('AI Bridge 已启动', 'info');
             queryStatus();
             setInterval(queryStatus, 2000);
+            
+            eda.sys_MessageBus.subscribePublic('easyeda-ai-bridge-events', (data) => {
+                const msg = data;
+                if (msg.type === 'execute') {
+                    addLog('执行: ' + msg.data.code.substring(0, 50) + (msg.data.code.length > 50 ? '...' : ''), 'info');
+                } else if (msg.type === 'result') {
+                    const resultStr = JSON.stringify(msg.data.result);
+                    addLog('结果: ' + resultStr.substring(0, 80) + (resultStr.length > 80 ? '...' : ''), 'success');
+                } else if (msg.type === 'error') {
+                    addLog('错误: ' + msg.data.error, 'error');
+                }
+            });
         }
-
-        if (window.eda) {
-            init();
-        } else {
-            window.onload = () => setTimeout(init, 500);
-        }
+        
+        if (window.eda) init();
+        else window.onload = () => setTimeout(init, 500);
     </script>
 </body>
 </html>

@@ -1,23 +1,23 @@
 /**
- * EasyEDA Bridge Server - 6-Digit Pairing + HTTP Only (Hono.js)
+ * EasyEDA Bridge Server - 6-Digit Pairing + SQLite Queue
  */
 
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { randomUUID } from 'node:crypto';
+import { initDatabase, getDb, closeDatabase } from './db.mjs';
 
 const PORT = 49620;
 const SERVICE_ID = 'easyeda-bridge';
+const HOST = process.env.HOST || 'http://localhost:49620';
 
 const PAIR_CODE_TTL_MS = 30 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const POLL_TIMEOUT_MS = 30_000;
-const POLL_INTERVAL_MS = 100;
+const PAIRING_BUFFER_MS = 60 * 1000;
 
-const pairCodeMap = new Map();
-const sessionMap = new Map();
-const pendingCommands = new Map(); // Agent → EDA: commands waiting for EDA to poll
-const pendingResults = new Map();   // EDA → Agent: results waiting for Agent to collect
+const VERIFY_BUFFER_MS = 60 * 1000;
 
 function generatePairCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -25,44 +25,53 @@ function generatePairCode() {
 
 function createSession() {
   const sessionId = `sess_${randomUUID().slice(0, 8)}`;
-  sessionMap.set(sessionId, {
-    createdAt: Date.now(),
-    lastActive: Date.now(),
-    paired: false,
-  });
+  const db = getDb();
+  const now = Date.now();
+  
+  db.prepare(`
+    INSERT INTO sessions (session_id, status, created_at, last_active)
+    VALUES (?, 'pending', ?, ?)
+  `).run(sessionId, now, now);
+  
   return sessionId;
 }
 
+function getSession(sessionId) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId);
+}
+
 function isSessionValid(sessionId) {
-  const session = sessionMap.get(sessionId);
+  const session = getSession(sessionId);
   if (!session) return false;
-  return Date.now() - session.createdAt < SESSION_TTL_MS;
+  return Date.now() - session.created_at < SESSION_TTL_MS;
 }
 
-function cleanupExpiredPairCodes() {
+function updateSession(sessionId, updates) {
+  const db = getDb();
+  const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+  const values = [...Object.values(updates), Date.now(), sessionId];
+  db.prepare(`UPDATE sessions SET ${fields}, last_active = ? WHERE session_id = ?`).run(...values);
+}
+
+function cleanupExpiredSessions() {
+  const db = getDb();
   const now = Date.now();
-  for (const [code, data] of pairCodeMap) {
-    if (now > data.expiresAt) pairCodeMap.delete(code);
-  }
+  db.prepare('DELETE FROM sessions WHERE created_at < ?').run(now - SESSION_TTL_MS);
+  db.prepare('DELETE FROM commands WHERE created_at < ?').run(now - 3600 * 1000);
 }
 
-setInterval(cleanupExpiredPairCodes, 60_000);
+setInterval(cleanupExpiredSessions, 60_000);
 
 function requireSession(getSessionId) {
   return async (c, next) => {
     const sessionId = getSessionId(c);
-    console.log(`[MIDDLEWARE] sessionId=${sessionId}, valid=${isSessionValid(sessionId)}`);
     if (!sessionId) {
       return c.json({ error: 'Missing sessionId' }, 400);
     }
-    const session = sessionMap.get(sessionId);
-    if (!session) {
-      console.log(`[MIDDLEWARE] Session not found in map, keys:`, [...sessionMap.keys()]);
-    }
-    if (!session || !isSessionValid(sessionId)) {
+    if (!isSessionValid(sessionId)) {
       return c.json({ error: 'Invalid session' }, 401);
     }
-    c.set('session', session);
     c.set('sessionId', sessionId);
     return next();
   };
@@ -72,6 +81,8 @@ const sessionFromHeader = (c) => c.req.header('x-session-id');
 const sessionFromParam = (c) => c.req.param('sessionId');
 
 const app = new Hono();
+
+app.use('/pairing.html', serveStatic({ root: './public' }));
 
 app.use('*', async (c, next) => {
   c.res.headers.set('Access-Control-Allow-Origin', '*');
@@ -83,10 +94,12 @@ app.use('*', async (c, next) => {
 app.options('*', (c) => c.text('', 204));
 
 app.get('/health', (c) => {
+  const db = getDb();
+  const sessions = db.prepare('SELECT COUNT(*) as count FROM sessions').get();
   return c.json({
     service: SERVICE_ID,
     status: 'ok',
-    sessions: sessionMap.size,
+    sessions: sessions.count,
     timestamp: Date.now(),
   });
 });
@@ -95,63 +108,91 @@ app.post('/pairing/request', (c) => {
   const code = generatePairCode();
   const sessionId = createSession();
   const now = Date.now();
+  const expiresIn = Math.floor(PAIR_CODE_TTL_MS / 1000);
+  
+  const db = getDb();
+  db.prepare(`
+    UPDATE sessions SET pair_code = ?, status = 'pending'
+    WHERE session_id = ?
+  `).run(code, sessionId);
 
-  pairCodeMap.set(code, { sessionId, expiresAt: now + PAIR_CODE_TTL_MS });
+  console.log(`[PAIRING] Request: code=${code}, sessionId=${sessionId}`);
 
   return c.json({
     success: true,
     code,
     sessionId,
-    expiresIn: Math.floor(PAIR_CODE_TTL_MS / 1000),
+    expiresIn,
+    url: `${HOST}/pairing.html?code=${code}&expires=${expiresIn}`,
   });
 });
 
 app.post('/pairing/verify', async (c) => {
   const { code } = await c.req.json().catch(() => ({}));
+  const db = getDb();
 
   if (!code || typeof code !== 'string') {
     return c.json({ success: false, error: 'Missing "code" field' }, 400);
   }
 
-  const pairData = pairCodeMap.get(code);
-  if (!pairData || Date.now() > pairData.expiresAt) {
+  let session = db.prepare('SELECT * FROM sessions WHERE pair_code = ? AND status = ?').get(code, 'pending');
+  
+  if (!session) {
+    const sessionsWithCode = db.prepare('SELECT * FROM sessions WHERE pair_code = ?').all(code);
+    if (sessionsWithCode.length > 0) {
+      session = sessionsWithCode.find(s => s.status === 'verified' && s.verified_at && (Date.now() - s.verified_at < VERIFY_BUFFER_MS));
+      if (session) {
+        updateSession(session.session_id, { last_active: Date.now() });
+        console.log(`[PAIRING] Verify cached: sessionId=${session.session_id}`);
+        return c.json({
+          success: true,
+          sessionId: session.session_id,
+          cached: true,
+        });
+      }
+    }
+    console.log(`[PAIRING] Verify failed: code=${code} not found`);
     return c.json({ success: false, error: '配对码无效或已过期' }, 400);
   }
 
-  pairCodeMap.delete(code);
-  const session = sessionMap.get(pairData.sessionId);
-  if (session) {
-    session.lastActive = Date.now();
-    session.paired = true;
-  }
+  db.prepare(`
+    UPDATE sessions SET pair_code = NULL, status = 'verified', verified_at = ?
+    WHERE session_id = ?
+  `).run(Date.now(), session.session_id);
+
+  console.log(`[PAIRING] Verified: sessionId=${session.session_id}`);
 
   return c.json({
     success: true,
-    sessionId: pairData.sessionId,
+    sessionId: session.session_id,
   });
 });
 
 app.post('/execute', requireSession(sessionFromHeader), async (c) => {
-  const session = c.get('session');
   const sessionId = c.get('sessionId');
-  console.log(`[EXECUTE] sessionId=${sessionId}`);
 
   const { code } = await c.req.json().catch(() => ({}));
-  console.log(`[EXECUTE] code=${code?.substring(0, 50)}`);
   
   if (!code || typeof code !== 'string') {
     return c.json({ success: false, error: 'Missing "code" field' }, 400);
   }
 
-  session.lastActive = Date.now();
+  updateSession(sessionId, { last_active: Date.now() });
 
   const requestId = randomUUID();
-  console.log(`[EXECUTE] requestId=${requestId}, storing command for EDA to poll...`);
-  pendingCommands.set(sessionId, { requestId, code, timestamp: Date.now() });
-  console.log(`[EXECUTE] pendingCommands:`, [...pendingCommands.entries()]);
+  const db = getDb();
+  const now = Date.now();
+  
+  db.prepare(`
+    INSERT INTO commands (request_id, session_id, code, status, created_at, updated_at)
+    VALUES (?, ?, ?, 'pending', ?, ?)
+  `).run(requestId, sessionId, code, now, now);
+
+  console.log(`[EXEC] requestId=${requestId}, code=${code.substring(0, 50)}`);
 
   const result = await waitForResult(requestId);
-  console.log(`[EXECUTE] result received:`, result);
+
+  console.log(`[EXEC] result: requestId=${requestId}, duration=${result.duration}ms, error=${result.error}`);
 
   return c.json({
     success: true,
@@ -162,30 +203,48 @@ app.post('/execute', requireSession(sessionFromHeader), async (c) => {
 });
 
 app.get('/poll/:sessionId', requireSession(sessionFromParam), (c) => {
-  const session = c.get('session');
   const sessionId = c.get('sessionId');
+  const db = getDb();
 
-  const cmd = pendingCommands.get(sessionId);
+  const cmd = db.prepare(`
+    SELECT request_id, code FROM commands 
+    WHERE session_id = ? AND status = 'pending' 
+    ORDER BY created_at ASC LIMIT 1
+  `).get(sessionId);
+
   if (cmd) {
-    pendingCommands.delete(sessionId);
+    db.prepare(`UPDATE commands SET status = 'processing', updated_at = ? WHERE request_id = ?`).run(Date.now(), cmd.request_id);
+    console.log(`[POLL] Got command: requestId=${cmd.request_id}, code=${cmd.code?.substring(0, 30)}`);
     return c.json(cmd);
   }
 
-  return c.json({ noCommand: true, paired: session.paired });
+  const session = getSession(sessionId);
+  const paired = session?.status === 'verified';
+  return c.json({ noCommand: true, paired });
 });
 
 app.post('/result', requireSession(sessionFromHeader), async (c) => {
-  const session = c.get('session');
-
   const { requestId, result, error } = await c.req.json().catch(() => ({}));
   if (!requestId) {
     return c.json({ success: false, error: 'Missing requestId' }, 400);
   }
 
-  console.log(`[RESULT] requestId=${requestId}, result=`, result);
-  session.lastActive = Date.now();
-  pendingResults.set(requestId, { requestId, result, error, timestamp: Date.now() });
-  console.log(`[RESULT] pendingResults:`, [...pendingResults.entries()]);
+  const db = getDb();
+  
+  db.prepare(`
+    UPDATE commands SET result = ?, error = ?, status = ?, updated_at = ?
+    WHERE request_id = ?
+  `).run(
+    result ? JSON.stringify(result) : null,
+    error || null,
+    error ? 'error' : 'done',
+    Date.now(),
+    requestId
+  );
+
+  console.log(`[RESULT] requestId=${requestId}, status=${error ? 'error' : 'done'}`);
+
+  updateSession(c.get('sessionId'), { last_active: Date.now() });
 
   return c.json({ success: true });
 });
@@ -193,28 +252,38 @@ app.post('/result', requireSession(sessionFromHeader), async (c) => {
 function waitForResult(requestId) {
   return new Promise((resolve) => {
     const startTime = Date.now();
-    const check = setInterval(() => {
-      const res = pendingResults.get(requestId);
-      if (res) {
-        console.log(`[WAIT] Found result for requestId=${requestId}`);
-        clearInterval(check);
-        pendingResults.delete(requestId);
+    const db = getDb();
+    
+    const check = () => {
+      const res = db.prepare('SELECT * FROM commands WHERE request_id = ?').get(requestId);
+      if (res && (res.status === 'done' || res.status === 'error')) {
+        db.prepare('DELETE FROM commands WHERE request_id = ?').run(requestId);
         resolve({
-          value: res.result,
+          value: res.result ? JSON.parse(res.result) : null,
           error: res.error,
           duration: Date.now() - startTime,
         });
-        return;
+        return true;
+      }
+      return false;
+    };
+
+    if (check()) return;
+
+    const interval = setInterval(() => {
+      if (check()) {
+        clearInterval(interval);
       }
     }, 100);
 
     setTimeout(() => {
-      clearInterval(check);
-      console.log(`[WAIT] Timeout for requestId=${requestId}`);
+      clearInterval(interval);
       resolve({ value: null, error: 'Timeout waiting for result', duration: Date.now() - startTime });
-    }, 30000);
+    }, POLL_TIMEOUT_MS);
   });
 }
+
+initDatabase();
 
 console.log(`Starting server on port ${PORT}...`);
 
@@ -224,10 +293,11 @@ serve({
 }, (info) => {
   console.log(`
 ╔══════════════════════════════════════════════════════════════╗
-║         EasyEDA Bridge Server - 6位配对码 (HTTP Only)       ║
+║         EasyEDA Bridge Server - 6位配对码 (SQLite)           ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  Port:        ${PORT}                                          ║
 ║  Service ID:  ${SERVICE_ID}                              ║
+║  SQLite:      队列持久化 + 60秒配对缓冲                         ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  HTTP Endpoints:                                             ║
 ║    POST /pairing/request - 请求配对码 (EDA调用)                ║
@@ -238,3 +308,6 @@ serve({
 ╚══════════════════════════════════════════════════════════════╝
   `);
 });
+
+process.on('exit', () => closeDatabase());
+process.on('SIGINT', () => { closeDatabase(); process.exit(0); });

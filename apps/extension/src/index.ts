@@ -7,10 +7,12 @@ const MESSAGE_BUS_EVENTS = 'easyeda-ai-bridge-events';
 const RPC_SERVICE_NAME = 'ai-bridge-status';
 
 let sessionId = '';
-let connected = false;
+let paired = false;
 let pairingCode = '';
 let pairingExpiresAt = 0;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let hasShownPairedToast = false;
+let connectionError = false;
 
 function getStored(key: string, def = ''): string {
   try {
@@ -63,7 +65,7 @@ function broadcast(channel: string, payload: object): void {
   }
 }
 
-function broadcastStatus(data: { connected: boolean; sessionId?: string; pairingCode?: string }): void {
+function broadcastStatus(data: { paired: boolean; sessionId?: string; pairingCode?: string; url?: string; connectionError?: boolean }): void {
   broadcast(MESSAGE_BUS_CHANNEL, data);
 }
 
@@ -138,12 +140,14 @@ function stopPolling(): void {
     clearInterval(pollTimer);
     pollTimer = null;
   }
-  connected = false;
+  paired = false;
+  connectionError = false;
 }
 
 function disconnectBridge(): void {
   stopPolling();
-  broadcastStatus({ connected: false, sessionId });
+  connectionError = false;
+  broadcastStatus({ paired: false, sessionId, connectionError: false });
 }
 
 async function requestPairingCode(): Promise<void> {
@@ -151,7 +155,8 @@ async function requestPairingCode(): Promise<void> {
   clearSessionId();
   sessionId = '';
   pairingCode = '';
-  connected = false;
+  paired = false;
+  connectionError = false;
   
   try {
     const result = await httpRequest('POST', '/pairing/request') as any;
@@ -161,7 +166,7 @@ async function requestPairingCode(): Promise<void> {
       pairingExpiresAt = Date.now() + result.expiresIn * 1000;
       saveSessionId(sessionId);
       showToast(`配对码: ${pairingCode}`, 'info');
-      broadcastStatus({ connected: false, sessionId, pairingCode });
+      broadcastStatus({ paired: false, sessionId, pairingCode, url: result.url, connectionError: false });
       startEdaPolling();
     }
   } catch (err) {
@@ -179,60 +184,56 @@ async function pollCommands(): Promise<void> {
     pairingCode = '';
     sessionId = '';
     clearSessionId();
-    broadcastStatus({ connected: false, sessionId: '' });
+      broadcastStatus({ paired: false, sessionId: '', connectionError: false });
     return;
   }
 
   try {
-    console.log(`[POLL] sessionId=${sessionId}, polling...`);
     const result = await httpRequest('GET', `/poll/${sessionId}`) as any;
-    console.log(`[POLL] result:`, result);
+    connectionError = false;
 
-    if (!connected && pairingCode && result.paired) {
-      connected = true;
+    if (result.paired && !paired) {
+      paired = true;
       pairingCode = '';
-      showToast('配对成功!', 'success');
-      broadcastStatus({ connected, sessionId });
+      if (!hasShownPairedToast) {
+        hasShownPairedToast = true;
+        showToast('配对成功!', 'success');
+      }
+      broadcastStatus({ paired, sessionId, connectionError: false });
     }
 
-    if (result.requestId && result.code) {
-      console.log(`[POLL] Got command id=${result.requestId}, code=${result.code.substring(0, 30)}`);
+    if (result.request_id && result.code) {
       const startTime = Date.now();
-      const id = result.requestId;
+      const id = result.request_id;
       const code = result.code;
 
       broadcastEvent('execute', { id, code });
 
       try {
-        console.log(`[POLL] Executing code...`);
         const execResult = await executeCode(code);
         const duration = Date.now() - startTime;
-        console.log(`[POLL] Execution done, result:`, execResult);
         broadcastEvent('result', { id, result: execResult, duration });
 
-        console.log(`[POLL] Submitting result...`);
         await httpRequest('POST', '/result', { requestId: id, result: execResult });
-        console.log(`[POLL] Result submitted`);
       } catch (error) {
         const duration = Date.now() - startTime;
         const errorMsg = toSafeErrorMessage(error);
-        console.log(`[POLL] Execution error:`, errorMsg);
         broadcastEvent('error', { id, error: errorMsg, duration });
 
-        console.log(`[POLL] Submitting error result...`);
         await httpRequest('POST', '/result', { requestId: id, error: errorMsg });
       }
     }
   } catch (err: any) {
     console.error('[AI Bridge] Poll error:', err);
+    connectionError = true;
     if (err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
       console.log('[POLL] Session invalid, clearing...');
       stopPolling();
       clearSessionId();
       sessionId = '';
       showToast('会话已失效，请重新请求配对码', 'error');
-      broadcastStatus({ connected: false, sessionId: '' });
     }
+    broadcastStatus({ paired, sessionId, connectionError: true });
   }
 }
 
@@ -260,14 +261,31 @@ export async function activate(status?: 'onStartupFinished', arg?: string): Prom
       disconnectBridge();
       return { success: true };
     }
-    return { connected, sessionId, pairingCode };
+    return { paired, sessionId, pairingCode, connectionError };
   });
 
   setTimeout(() => {
     if (sessionId) {
       startEdaPolling();
+      checkPairedStatus();
     }
   }, 2000);
+}
+
+async function checkPairedStatus(): Promise<void> {
+  if (!sessionId) return;
+  try {
+    const result = await httpRequest('GET', `/poll/${sessionId}`) as any;
+    connectionError = false;
+    if (result.paired) {
+      paired = true;
+      broadcastStatus({ paired, sessionId, connectionError: false });
+    }
+  } catch (e) {
+    console.log('[AI Bridge] Check paired status failed:', e);
+    connectionError = true;
+    broadcastStatus({ paired, sessionId, connectionError: true });
+  }
 }
 
 export function about(): void {
@@ -278,9 +296,9 @@ export function about(): void {
 }
 
 export async function openIFrame(): Promise<void> {
-  await eda.sys_IFrame.openIFrame('/dist/index.html', 600, 500, 'ai-bridge-test', {
+  await eda.sys_IFrame.openIFrame('/dist/index.html', 600, 500, 'ai-bridge-launch', {
     maximizeButton: true,
     minimizeButton: true,
-    title: 'AI Bridge Test',
+    title: 'Launch AI Bridge',
   });
 }
