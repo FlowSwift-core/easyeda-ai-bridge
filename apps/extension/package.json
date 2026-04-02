@@ -1,6 +1,6 @@
 {
 	"name": "extension",
-	"version": "1.3.2",
+	"version": "1.0.0",
 	"description": "EasyEDA Pro AI Bridge Extension",
 	"author": "EasyEDA AI Team",
 	"license": "Apache-2.0",
@@ -9,7 +9,7 @@
 	},
 	"scripts": {
 		"update-build-time": "ts-node ./build/update-build-time.ts",
-		"prebuild": "cd ../eext-frontend && npm run build",
+		"prebuild": "cd ../eext-frontend && npm run build && cd ../extension && npx ts-node ./sync-version.ts",
 		"precompile": "cp -r ./dist ./dist.bak",
 		"compile": "ts-node ./config/esbuild.prod.ts",
 		"postcompile": "cp -r ./dist.bak/* ./dist/ 2>/dev/null || true && rm -rf ./dist.bak",

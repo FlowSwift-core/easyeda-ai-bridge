@@ -2,15 +2,29 @@
  * EasyEDA Bridge Server - 6-Digit Pairing + SQLite Queue
  */
 
-import { Hono } from 'hono';
+import { readFileSync } from 'node:fs';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { randomUUID } from 'node:crypto';
+import { Hono } from 'hono';
+
+const PAIRING_TEMPLATE = readFileSync('./public/instruction.md', 'utf-8');
+
+function renderPairingTemplate(code, expires) {
+  const minutes = Math.floor(expires / 60);
+  const expiresText = expires > 0 ? `${minutes}分钟内有效` : '无效';
+  const codeDisplay = (code && code.length === 6) ? code : '------';
+  
+  return PAIRING_TEMPLATE
+    .replace(/{code}/g, codeDisplay)
+    .replace(/{expires}/g, expiresText);
+}
 import { initDatabase, getDb, closeDatabase } from './db.mjs';
 
 const PORT = 49620;
 const SERVICE_ID = 'easyeda-bridge';
 const HOST = process.env.HOST || 'http://localhost:49620';
+const INSTRUCTION_PATH = process.env.INSTRUCTION_PATH || '/instruction';
 
 const PAIR_CODE_TTL_MS = 30 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -84,6 +98,16 @@ const app = new Hono();
 
 app.use('/pairing.html', serveStatic({ root: './public' }));
 
+app.get('/instruction', (c) => {
+  const code = c.req.query('code') || '';
+  const expires = parseInt(c.req.query('expires') || '0', 10);
+  const html = renderPairingTemplate(code, expires);
+  
+  return c.text(html, 200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+  });
+});
+
 app.use('*', async (c, next) => {
   c.res.headers.set('Access-Control-Allow-Origin', '*');
   c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -123,7 +147,7 @@ app.post('/pairing/request', (c) => {
     code,
     sessionId,
     expiresIn,
-    url: `${HOST}/pairing.html?code=${code}&expires=${expiresIn}`,
+    url: `${HOST}/instruction?code=${code}&expires=${expiresIn}`,
   });
 });
 

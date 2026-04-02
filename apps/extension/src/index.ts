@@ -1,6 +1,12 @@
-import * as extensionConfig from '../../extension/extension.json';
+import { VERSION } from './version';
 
 export async function activate(status?: 'onStartupFinished', arg?: string): Promise<void> {
+  if (isInitialized) {
+    console.log('[AI Bridge] Already initialized, skipping...');
+    return;
+  }
+  isInitialized = true;
+  
   console.log('[AI Bridge] === ACTIVATE START ===');
   console.log('[AI Bridge] Activating...');
   showToast('AI Bridge: 启动中...', 'info');
@@ -29,7 +35,7 @@ export async function activate(status?: 'onStartupFinished', arg?: string): Prom
 
 export function about(): void {
   eda.sys_Dialog.showInformationMessage(
-    `EasyEDA AI Bridge v${extensionConfig.version}\n6位配对码方案\n连接AI Agents到你的EDA工作区`,
+    `EasyEDA AI Bridge v${VERSION}\n6位配对码方案\n连接AI Agents到你的EDA工作区`,
     'About AI Bridge',
   );
 }
@@ -55,6 +61,7 @@ let pairingExpiresAt = 0;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let hasShownPairedToast = false;
 let connectionError = false;
+let isInitialized = false;
 
 function getStored(key: string, def = ''): string {
   try {
@@ -284,7 +291,7 @@ function startEdaPolling(): void {
 
   pollTimer = setInterval(() => {
     pollCommands();
-  }, 1000);
+  }, 3000);
 }
 
 async function checkPairedStatus(): Promise<void> {

@@ -3,7 +3,7 @@
 	"uuid": "303392c332a444e4a8291c722d7f2056",
 	"displayName": "AI Bridge",
 	"description": "WebSocket bridge between EasyEDA Pro and AI agents.",
-	"version": "1.3.2",
+	"version": "1.0.0",
 	"publisher": "EasyEDA AI Team",
 	"engines": {
 		"eda": "^3.0.0"
