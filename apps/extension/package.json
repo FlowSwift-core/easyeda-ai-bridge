@@ -9,11 +9,13 @@
 	},
 	"scripts": {
 		"update-build-time": "ts-node ./build/update-build-time.ts",
-		"build:css": "tailwindcss -i ./iframe/src/input.css -o ./dist/styles.css --minify && cp ./iframe/index.html ./dist/",
-		"compile": "rimraf ./dist/ && ts-node ./config/esbuild.prod.ts",
+		"prebuild": "cd ../eext-frontend && npm run build",
+		"precompile": "cp -r ./dist ./dist.bak",
+		"compile": "ts-node ./config/esbuild.prod.ts",
+		"postcompile": "cp -r ./dist.bak/* ./dist/ 2>/dev/null || true && rm -rf ./dist.bak",
 		"lint": "eslint",
 		"fix": "eslint --fix",
-		"build": "npm run compile && npm run build:css && ts-node ./build/packaged.ts"
+		"build": "npm run compile && ts-node ./build/packaged.ts"
 	},
 	"dependencies": {
 		"overlayscrollbars": "^2.14.0",
@@ -32,7 +34,6 @@
 		"lint-staged": "^16.2.3",
 		"rimraf": "^6.0.1",
 		"simple-git-hooks": "^2.13.1",
-		"tailwindcss": "^3.4.17",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.7.3"
 	}

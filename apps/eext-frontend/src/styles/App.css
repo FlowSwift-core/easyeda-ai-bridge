@@ -1,0 +1,111 @@
+.status-bar {
+  @apply flex items-center gap-2 p-3 bg-gh-card rounded-lg mb-4;
+}
+
+.status-dot {
+  @apply w-2.5 h-2.5 rounded-full bg-gh-muted flex-shrink-0;
+}
+
+.status-bar.paired .status-dot {
+  @apply bg-gh-green shadow-[0_0_8px_#3fb950];
+}
+
+.status-bar.pending .status-dot {
+  @apply bg-yellow-500;
+}
+
+.status-bar.error .status-dot {
+  @apply bg-gh-red;
+}
+
+.status-bar.paired .flex-1 {
+  @apply text-gh-green;
+}
+
+.status-bar.pending .flex-1 {
+  @apply text-yellow-500;
+}
+
+.status-bar.error .flex-1 {
+  @apply text-gh-red;
+}
+
+.card {
+  @apply bg-gh-card border border-gh-border rounded-lg p-4 mb-3;
+}
+
+.card-title {
+  @apply text-xs font-semibold text-gh-muted uppercase tracking-wide mb-3;
+}
+
+.info-grid {
+  @apply grid grid-cols-[auto_1fr] gap-y-2 gap-x-4;
+}
+
+.info-label {
+  @apply text-gh-muted;
+}
+
+.info-value {
+  @apply text-gh-text font-mono break-all;
+}
+
+.pairing-code {
+  @apply text-4xl font-bold text-gh-blue tracking-[12px] font-mono my-4 p-5 bg-[rgba(88,166,255,0.1)] rounded-xl border border-dashed border-gh-blue;
+}
+
+.url-link {
+  @apply text-xs text-gh-blue break-all p-2 bg-[rgba(88,166,255,0.05)] rounded cursor-pointer;
+}
+
+.btn {
+  @apply py-2.5 px-4 border-none rounded-md text-sm font-medium cursor-pointer transition-all;
+}
+
+.btn-primary {
+  @apply bg-green-600 text-white;
+}
+
+.btn-primary:hover {
+  @apply bg-green-500;
+}
+
+.btn-secondary {
+  @apply bg-[#21262d] text-gh-text border border-gh-border;
+}
+
+.btn-secondary:hover {
+  @apply bg-[#30363d];
+}
+
+.btn-danger {
+  @apply bg-[#21262d] text-gh-red border border-gh-border;
+}
+
+.btn-danger:hover {
+  @apply bg-[#30363d];
+}
+
+.log-container {
+  @apply overflow-x-hidden font-mono text-xs max-h-60 overflow-y-auto;
+}
+
+.log-entry {
+  @apply py-1 border-b border-gh-border text-gh-muted break-all;
+}
+
+.log-entry:last-child {
+  @apply border-b-0;
+}
+
+.log-entry.success {
+  @apply text-gh-green;
+}
+
+.log-entry.error {
+  @apply text-gh-red;
+}
+
+.log-entry.info {
+  @apply text-gh-blue;
+}

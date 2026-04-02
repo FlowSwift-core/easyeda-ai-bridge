@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Bridge</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", function () {
+        const mockEDA = {
+          sys_MessageBus: {
+            rpcCallPublic: function (channel, method) {
+              console.log(`RPC Call - Channel: ${channel}, Method: ${method}`);
+              // 模拟返回一个 Promise
+              return new Promise((resolve) => {
+                setTimeout(() => {
+                  resolve(`Response from ${channel} for method ${method}`);
+                }, 1000);
+              });
+            },
+            subscribePublic: function (channel, callback) {
+              console.log(`Subscribed to channel: ${channel}`);
+              // 模拟接收消息
+              setTimeout(() => {
+                callback(`Message from ${channel}`);
+              }, 2000);
+            },
+          },
+        };
+        window.eda = mockEDA; // 模拟 EDA 对象
+        window.initReactApp({
+                    eda: window.eda,
+                    onRequestPairing: function() {
+                        return window.eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'requestPairing');
+                    },
+                    onDisconnect: function() {
+                        return window.eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'disconnect');
+                    }
+                });
+      });
+    </script>
+  </body>
+</html>
