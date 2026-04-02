@@ -18,7 +18,7 @@
             justify-content: center;
         }
         .container {
-            max-width: 500px;
+            max-width: 700px;
             padding: 40px;
         }
         h1 {
@@ -114,6 +114,18 @@
         .api-endpoint .url {
             color: #fbbf24;
         }
+        .api-endpoint .comment {
+            color: #71717a;
+            font-size: 11px;
+        }
+        .error {
+            color: #ef4444;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 6px;
+            margin-top: 12px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -124,7 +136,7 @@
         <div class="code-display">
             <div class="code-label">配对码</div>
             <div class="code" id="pairCode">------</div>
-            <div class="expires" id="expires">30分钟内有效</div>
+            <div class="expires" id="expires">等待配对码...</div>
         </div>
         
         <div class="section">
@@ -139,7 +151,7 @@
             </div>
             <div class="step">
                 <div class="step-num">3</div>
-                <div class="step-content">调用 <code>/execute</code> 接口同步执行代码，结果会实时返回</div>
+                <div class="step-content">调用 <code>/execute</code> 接口执行代码，结果会实时返回</div>
             </div>
         </div>
         
@@ -152,7 +164,26 @@
             <div class="api-endpoint">
                 <span class="method">POST</span> <span class="url">/execute</span><br>
                 Header: X-Session-Id: &lt;sessionId&gt;<br>
-                Body: { "code": "eda.design.getSheet().name" }
+                Body: { "code": "eda.sys_Storage.getExtensionUserConfig('test')" }
+                <div class="comment">// 读取扩展配置</div>
+            </div>
+            <div class="api-endpoint">
+                <span class="method">POST</span> <span class="url">/execute</span><br>
+                Header: X-Session-Id: &lt;sessionId&gt;<br>
+                Body: { "code": "eda.sch_PrimitiveComponent.getAllPrimitiveId()" }
+                <div class="comment">// 获取原理图中所有元件ID</div>
+            </div>
+            <div class="api-endpoint">
+                <span class="method">POST</span> <span class="url">/execute</span><br>
+                Header: X-Session-Id: &lt;sessionId&gt;<br>
+                Body: { "code": "eda.sch_PrimitiveComponent.get(['e1']).then(r=>r[0]?.designator)" }
+                <div class="comment">// 获取指定元件信息</div>
+            </div>
+            <div class="api-endpoint">
+                <span class="method">POST</span> <span class="url">/execute</span><br>
+                Header: X-Session-Id: &lt;sessionId&gt;<br>
+                Body: { "code": "eda.dmt_Project.getCurrentProjectInfo().then(p=>p?.friendlyName)" }
+                <div class="comment">// 获取当前工程名称</div>
             </div>
         </div>
     </div>
@@ -160,19 +191,35 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code') || '';
-        const expiresIn = parseInt(urlParams.get('expires') || '1800', 10);
+        const expiresIn = parseInt(urlParams.get('expires') || '0', 10);
         
-        if (code) {
+        const errorDiv = document.getElementById('error');
+        
+        if (code && code.length === 6 && /^\d+$/.test(code)) {
             document.getElementById('pairCode').textContent = code;
             document.getElementById('apiCode').textContent = code;
+            
+            if (expiresIn > 0) {
+                const minutes = Math.floor(expiresIn / 60);
+                document.getElementById('expires').textContent = minutes + '分钟内有效';
+                
+                if (expiresIn <= 300) {
+                    document.getElementById('expires').style.color = '#ef4444';
+                }
+                
+                setTimeout(() => {
+                    document.getElementById('pairCode').textContent = '------';
+                    document.getElementById('apiCode').textContent = '------';
+                    document.getElementById('expires').textContent = '已过期，请重新请求配对码';
+                    document.getElementById('expires').style.color = '#ef4444';
+                }, expiresIn * 1000);
+            } else {
+                document.getElementById('expires').textContent = '有效';
+            }
+        } else {
+            document.getElementById('expires').textContent = '无效的配对码';
+            document.getElementById('pairCode').style.color = '#ef4444';
         }
-        
-        if (expiresIn > 0) {
-            const minutes = Math.floor(expiresIn / 60);
-            document.getElementById('expires').textContent = minutes + '分钟内有效';
-        }
-        
-        setTimeout(() => window.location.reload(), expiresIn * 1000);
     </script>
 </body>
 </html>

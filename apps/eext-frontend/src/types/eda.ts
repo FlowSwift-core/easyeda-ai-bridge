@@ -1,3 +1,29 @@
+export interface BridgeStatus {
+  paired: boolean;
+  sessionId?: string;
+  pairingCode?: string;
+  url?: string;
+  connectionError?: boolean;
+  success?: boolean;
+}
+
+export interface BridgeEvent {
+  id?: number;
+  type: 'execute' | 'result' | 'error';
+  data: {
+    id?: string;
+    code?: string;
+    result?: unknown;
+    duration?: number;
+    error?: string;
+  };
+}
+
+interface ISYS_MessageBusTask {
+  cancel: () => void;
+  running: () => boolean;
+}
+
 export interface EdaApi {
   sys_Message: {
     showToastMessage: (message: string, type: number, duration: number) => void;
@@ -6,7 +32,7 @@ export interface EdaApi {
     rpcCallPublic: (service: string, action?: string) => Promise<BridgeStatus>;
     rpcServicePublic: (service: string, handler: (action?: string) => unknown) => void;
     publishPublic: (channel: string, payload: unknown) => void;
-    subscribePublic: (channel: string, callback: (data: unknown) => void) => void;
+    subscribePublic: (channel: string, callback: (data: unknown) => void) => ISYS_MessageBusTask;
   };
   sys_Storage: {
     getExtensionUserConfig: (key: string) => string | undefined;
@@ -29,26 +55,6 @@ export interface EdaApi {
       minimizeButton?: boolean;
       title?: string;
     }) => Promise<void>;
-  };
-}
-
-export interface BridgeStatus {
-  paired: boolean;
-  sessionId?: string;
-  pairingCode?: string;
-  url?: string;
-  connectionError?: boolean;
-  success?: boolean;
-}
-
-export interface BridgeEvent {
-  type: 'execute' | 'result' | 'error';
-  data: {
-    id?: string;
-    code?: string;
-    result?: unknown;
-    duration?: number;
-    error?: string;
   };
 }
 

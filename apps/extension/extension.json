@@ -40,12 +40,12 @@
 				"menuItems": [
 					{
 						"id": "OpenIFrame",
-						"title": "Test IFrame",
+						"title": "打开 AI Bridge",
 						"registerFn": "openIFrame"
 					},
 					{
 						"id": "About",
-						"title": "About...",
+						"title": "关于...",
 						"registerFn": "about"
 					}
 				]
@@ -58,12 +58,12 @@
 				"menuItems": [
 					{
 						"id": "OpenIFrame",
-						"title": "Test IFrame",
+						"title": "打开 AI Bridge",
 						"registerFn": "openIFrame"
 					},
 					{
 						"id": "About",
-						"title": "About...",
+						"title": "关于...",
 						"registerFn": "about"
 					}
 				]
@@ -76,12 +76,12 @@
 				"menuItems": [
 					{
 						"id": "OpenIFrame",
-						"title": "Test IFrame",
+						"title": "打开 AI Bridge",
 						"registerFn": "openIFrame"
 					},
 					{
 						"id": "About",
-						"title": "About...",
+						"title": "关于...",
 						"registerFn": "about"
 					}
 				]

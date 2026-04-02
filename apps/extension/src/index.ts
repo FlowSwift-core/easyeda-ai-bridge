@@ -35,7 +35,7 @@ export function about(): void {
 }
 
 export async function openIFrame(): Promise<void> {
-  await eda.sys_IFrame.openIFrame('/dist/index.html', 600, 500, 'ai-bridge-launch', {
+  await eda.sys_IFrame.openIFrame('/dist/index.html', 600, 800, 'ai-bridge-launch', {
     maximizeButton: true,
     minimizeButton: true,
     title: 'Launch AI Bridge',
@@ -90,7 +90,7 @@ function toSafeErrorMessage(error: unknown): string {
 
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
   try {
-    const toastType = type === 'success' ? 1 : type === 'error' ? 2 : 0;
+    const toastType = type === 'success' ? 'success' : type === 'error' ? 'error' : 'info';
     eda.sys_Message.showToastMessage(message, toastType as any, 3);
   } catch (err) {
     console.log(`[AI Bridge] ${message}`);

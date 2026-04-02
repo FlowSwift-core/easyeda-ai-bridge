@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BridgeProvider } from './hooks/useBridge';
 import { App } from './components/App';
 import './styles/globals.css';
 import './styles/App.css';
@@ -12,11 +13,13 @@ function initApp(options: {
   const root = createRoot(document.getElementById('root')!);
   root.render(
     <StrictMode>
-      <App
-        eda={options.eda}
-        onRequestPairing={options.onRequestPairing}
-        onDisconnect={options.onDisconnect}
-      />
+      <BridgeProvider eda={options.eda}>
+        <App
+          eda={options.eda}
+          onRequestPairing={options.onRequestPairing}
+          onDisconnect={options.onDisconnect}
+        />
+      </BridgeProvider>
     </StrictMode>
   );
 }
