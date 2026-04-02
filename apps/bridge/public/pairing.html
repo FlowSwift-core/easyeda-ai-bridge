@@ -67,64 +67,38 @@
             font-size: 14px;
             font-weight: 600;
             color: #fff;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
-        .step {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        .step-num {
-            width: 24px;
-            height: 24px;
-            background: #3b82f6;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-            flex-shrink: 0;
-        }
-        .step-content {
-            color: #a1a1aa;
-            line-height: 1.5;
-        }
-        .step-content code {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: "SF Mono", Monaco, monospace;
-            font-size: 13px;
-            color: #fbbf24;
-        }
-        .api-endpoint {
+        .api-block {
             background: #1e1e2e;
             border-radius: 6px;
-            padding: 12px;
-            margin-top: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
             font-family: "SF Mono", Monaco, monospace;
-            font-size: 12px;
-            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
         }
-        .api-endpoint .method {
+        .api-block .method {
             color: #22c55e;
             font-weight: bold;
         }
-        .api-endpoint .url {
+        .api-block .url {
             color: #fbbf24;
         }
-        .api-endpoint .comment {
+        .api-block .comment {
             color: #71717a;
-            font-size: 11px;
         }
-        .error {
-            color: #ef4444;
-            padding: 12px;
-            background: rgba(239, 68, 68, 0.1);
-            border-radius: 6px;
-            margin-top: 12px;
-            display: none;
+        .api-block .body {
+            color: #60a5fa;
+            white-space: pre-wrap;
+        }
+        .api-block .header {
+            color: #f472b6;
+        }
+        .step {
+            margin-bottom: 12px;
+            padding-left: 16px;
+            border-left: 3px solid #3b82f6;
         }
     </style>
 </head>
@@ -134,56 +108,69 @@
         <p class="subtitle">Agent 配对页面</p>
         
         <div class="code-display">
-            <div class="code-label">配对码</div>
+            <div class="code-label">配对码 (Pairing Code)</div>
             <div class="code" id="pairCode">------</div>
             <div class="expires" id="expires">等待配对码...</div>
         </div>
         
         <div class="section">
-            <div class="section-title">连接步骤</div>
+            <div class="section-title">配对步骤 (Pairing Steps)</div>
+            
             <div class="step">
-                <div class="step-num">1</div>
-                <div class="step-content">在 Agent 端调用 <code>/pairing/verify</code> API，提交配对码进行验证</div>
-            </div>
-            <div class="step">
-                <div class="step-num">2</div>
-                <div class="step-content">验证成功后获取 <code>sessionId</code>，后续请求需携带 <code>X-Session-Id</code> 请求头</div>
-            </div>
-            <div class="step">
-                <div class="step-num">3</div>
-                <div class="step-content">调用 <code>/execute</code> 接口执行代码，结果会实时返回</div>
+                调用 <code>/pairing/verify</code> API 验证配对码，获取 sessionId 后即可调用 <code>/execute</code> 接口
             </div>
         </div>
         
         <div class="section">
-            <div class="section-title">API 示例</div>
-            <div class="api-endpoint">
-                <span class="method">POST</span> <span class="url">/pairing/verify</span><br>
-                Body: { "code": "<span id="apiCode">------</span>" }
+            <div class="section-title">API 参考 (API Reference)</div>
+            
+            <div class="api-block">
+# 1. 验证配对码 (Verify Pairing Code)
+
+<span class="method">POST</span> <span class="url">/pairing/verify</span>
+
+<span class="body">{
+  "code": "<span id="apiCode">------</span>"
+}</span>
+
+<span class="comment"># 返回 (Returns):
+{
+  "success": true,
+  "sessionId": "sess_xxx"
+}</span>
             </div>
-            <div class="api-endpoint">
-                <span class="method">POST</span> <span class="url">/execute</span><br>
-                Header: X-Session-Id: &lt;sessionId&gt;<br>
-                Body: { "code": "eda.sys_Storage.getExtensionUserConfig('test')" }
-                <div class="comment">// 读取扩展配置</div>
+            
+            <div class="api-block">
+# 2. 执行代码 (Execute Code)
+
+<span class="method">POST</span> <span class="url">/execute</span>
+
+<span class="header">X-Session-Id: &lt;sessionId&gt;</span>
+
+<span class="body">{
+  "code": "eda.dmt_Project.getCurrentProjectInfo().then(p=>p?.friendlyName)"
+}</span>
+
+<span class="comment"># 返回工程名称 (Returns project name)</span>
             </div>
-            <div class="api-endpoint">
-                <span class="method">POST</span> <span class="url">/execute</span><br>
-                Header: X-Session-Id: &lt;sessionId&gt;<br>
-                Body: { "code": "eda.sch_PrimitiveComponent.getAllPrimitiveId()" }
-                <div class="comment">// 获取原理图中所有元件ID</div>
-            </div>
-            <div class="api-endpoint">
-                <span class="method">POST</span> <span class="url">/execute</span><br>
-                Header: X-Session-Id: &lt;sessionId&gt;<br>
-                Body: { "code": "eda.sch_PrimitiveComponent.get(['e1']).then(r=>r[0]?.designator)" }
-                <div class="comment">// 获取指定元件信息</div>
-            </div>
-            <div class="api-endpoint">
-                <span class="method">POST</span> <span class="url">/execute</span><br>
-                Header: X-Session-Id: &lt;sessionId&gt;<br>
-                Body: { "code": "eda.dmt_Project.getCurrentProjectInfo().then(p=>p?.friendlyName)" }
-                <div class="comment">// 获取当前工程名称</div>
+            
+            <div class="api-block">
+# 更多示例 (More Examples)
+
+<span class="comment"># 获取原理图所有元件</span>
+eda.sch_PrimitiveComponent.getAllPrimitiveId()
+
+<span class="comment"># 读取存储配置</span>
+eda.sys_Storage.getExtensionUserConfig('key')
+
+<span class="comment"># 保存存储配置</span>
+eda.sys_Storage.setExtensionUserConfig('key', 'value')
+
+<span class="comment"># 获取当前工程信息</span>
+eda.dmt_Project.getCurrentProjectInfo()
+
+<span class="comment"># 获取 PCB 文档</span>
+eda.pcb_Document.getCurrent()
             </div>
         </div>
     </div>
@@ -192,8 +179,6 @@
         const urlParams = new URLSearchParams(window.location.search);
         const code = urlParams.get('code') || '';
         const expiresIn = parseInt(urlParams.get('expires') || '0', 10);
-        
-        const errorDiv = document.getElementById('error');
         
         if (code && code.length === 6 && /^\d+$/.test(code)) {
             document.getElementById('pairCode').textContent = code;
@@ -206,13 +191,6 @@
                 if (expiresIn <= 300) {
                     document.getElementById('expires').style.color = '#ef4444';
                 }
-                
-                setTimeout(() => {
-                    document.getElementById('pairCode').textContent = '------';
-                    document.getElementById('apiCode').textContent = '------';
-                    document.getElementById('expires').textContent = '已过期，请重新请求配对码';
-                    document.getElementById('expires').style.color = '#ef4444';
-                }, expiresIn * 1000);
             } else {
                 document.getElementById('expires').textContent = '有效';
             }

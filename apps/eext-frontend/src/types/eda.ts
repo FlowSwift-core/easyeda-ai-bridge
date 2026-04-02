@@ -44,7 +44,9 @@ export interface EdaApi {
       status: number;
       text: () => Promise<string>;
     }>;
-    openUrl: (url: string) => Promise<void>;
+  };
+  sys_Window: {
+    open: (url: string, target?: string) => void;
   };
   sys_Dialog: {
     showInformationMessage: (message: string, title: string) => void;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useBridge } from '../hooks/useBridge';
 import type { BridgeEvent } from '../types/eda';
 
@@ -11,16 +11,6 @@ interface AppProps {
 export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
   const { state } = useBridge();
   const { status, events } = state;
-  const [lastPairingCode, setLastPairingCode] = useState('');
-
-  useEffect(() => {
-    const newCode = status.pairingCode || '';
-    if (newCode && newCode !== lastPairingCode) {
-      setLastPairingCode(newCode);
-    } else if (!newCode && lastPairingCode) {
-      setLastPairingCode('');
-    }
-  }, [status.pairingCode, lastPairingCode]);
 
   const getStatusClass = useCallback((s: typeof status) => {
     if (s.paired) return 'paired';
@@ -34,21 +24,21 @@ export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
     return '等待配对';
   }, []);
 
-  const handleCopyCode = async () => {
-    if (lastPairingCode) {
-      await navigator.clipboard.writeText(lastPairingCode);
-    }
-  };
-
   const handleCopyUrl = async () => {
     if (status.url) {
       await navigator.clipboard.writeText(status.url);
     }
   };
 
+  const handleCopyCode = async () => {
+    if (status.pairingCode) {
+      await navigator.clipboard.writeText(status.pairingCode);
+    }
+  };
+
   const handleOpenUrl = async () => {
     if (status.url) {
-      await eda.sys_ClientUrl.openUrl(status.url);
+      eda.sys_Window.open(status.url);
     }
   };
 
@@ -80,31 +70,32 @@ export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
         </div>
       </div>
 
-      {lastPairingCode && (
+      {status.url && status.pairingCode && (
         <div className="card">
-          <div className="text-center py-4">
-            <div className="text-xs text-gh-muted uppercase mb-2">配对码</div>
-            <div className="pairing-code">{lastPairingCode}</div>
-            <div className="text-xs text-gh-muted mb-3">在 Agent 端输入配对码完成配对</div>
-            <button className="btn btn-secondary" onClick={handleCopyCode}>
+          <div className="card-title">配对信息</div>
+          
+          <div className="mb-4">
+            <div className="text-xs text-gh-muted mb-1">方式一：链接配对（推荐）</div>
+            <div className="text-xs text-gh-muted mb-2">直接发链接给 Agent 打开即可自动配对</div>
+            <div className="url-link break-all">{status.url}</div>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-xs text-gh-muted mb-1">方式二：配对码</div>
+            <div className="text-xs text-gh-muted mb-2">Agent 调用 /pairing/verify API 验证</div>
+            <div className="pairing-code">{status.pairingCode}</div>
+            <button className="btn btn-secondary mt-2" onClick={handleCopyCode}>
               复制配对码
             </button>
-            {status.url && (
-              <div className="mt-3">
-                <div className="text-xs text-gh-muted uppercase mb-2">Agent 连接链接</div>
-                <div className="url-link" onClick={handleOpenUrl}>
-                  {status.url}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <button className="btn btn-secondary flex-1" onClick={handleOpenUrl}>
-                    打开配对页面
-                  </button>
-                  <button className="btn btn-secondary flex-1" onClick={handleCopyUrl}>
-                    复制链接
-                  </button>
-                </div>
-              </div>
-            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button className="btn btn-secondary flex-1" onClick={handleOpenUrl}>
+              打开配对页面
+            </button>
+            <button className="btn btn-secondary flex-1" onClick={handleCopyUrl}>
+              复制链接
+            </button>
           </div>
         </div>
       )}
