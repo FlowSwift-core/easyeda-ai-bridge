@@ -2,7 +2,7 @@
 	"name": "easy-eda-ai-bridge",
 	"uuid": "303392c332a444e4a8291c722d7f2056",
 	"displayName": "EasyEDA AI Bridge",
-	"description": "将 AI Agents 无缝连接到你的 EasyEDA 设计工作区。通过 6 位配对码实现安全、快速的本地桥接。",
+	"description": "一键打通, 支持任意 AI Agent. 无需安装 MCP / Skill.",
 	"version": "1.0.0",
 	"publisher": "EasyEDA AI Team",
 	"engines": {

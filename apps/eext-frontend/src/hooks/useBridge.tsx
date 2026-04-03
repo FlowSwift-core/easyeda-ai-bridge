@@ -70,7 +70,12 @@ export function BridgeProvider({ children, eda }: { children: ReactNode; eda: Ed
       dispatch({ type: 'ADD_EVENT', payload: { ...event, id: eventId++ } });
     });
 
+    const pollTimer = setInterval(() => {
+      eda.sys_MessageBus.rpcCallPublic('ai-bridge-status', 'poll').catch(() => {});
+    }, 3000);
+
     return () => {
+      clearInterval(pollTimer);
       try {
         if (unsubStatus?.cancel) unsubStatus.cancel();
       } catch {}

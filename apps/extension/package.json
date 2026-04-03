@@ -17,7 +17,8 @@
 		"fix": "eslint --fix",
 		"build": "npm run compile && ts-node ./build/packaged.ts"
 	},
-	"dependencies": {
+  "bridgeUrl": "http://localhost:49620",
+  "dependencies": {
 		"overlayscrollbars": "^2.14.0",
 		"scroll-into-view-if-needed": "^3.1.0"
 	},

@@ -1,5 +1,7 @@
 import { VERSION } from './version';
 
+const _BRIDGE_URL: string = '__BRIDGE_URL_PLACEHOLDER__';
+
 export async function activate(status?: 'onStartupFinished', arg?: string): Promise<void> {
   if (isInitialized) {
     console.log('[AI Bridge] Already initialized, skipping...');
@@ -22,15 +24,12 @@ export async function activate(status?: 'onStartupFinished', arg?: string): Prom
       disconnectBridge();
       return { success: true };
     }
+    if (action === 'poll') {
+      pollCommands();
+      return { success: true };
+    }
     return { paired, sessionId, pairingCode, connectionError };
   });
-
-  setTimeout(() => {
-    if (sessionId) {
-      startEdaPolling();
-      checkPairedStatus();
-    }
-  }, 2000);
 }
 
 export function about(): void {
@@ -48,7 +47,6 @@ export async function openIFrame(): Promise<void> {
   });
 }
 
-const DEFAULT_BRIDGE_URL = 'http://localhost:49620';
 const STORAGE_KEY_SESSION = 'easyeda_ai_session_id';
 const MESSAGE_BUS_CHANNEL = 'easyeda-ai-bridge-status';
 const MESSAGE_BUS_EVENTS = 'easyeda-ai-bridge-events';
@@ -58,7 +56,6 @@ let sessionId = '';
 let paired = false;
 let pairingCode = '';
 let pairingExpiresAt = 0;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
 let hasShownPairedToast = false;
 let connectionError = false;
 let isInitialized = false;
@@ -76,7 +73,7 @@ function setStored(key: string, val: string): void {
 }
 
 function getBridgeUrl(): string {
-  return getStored('easyeda_bridge_url', DEFAULT_BRIDGE_URL);
+  return _BRIDGE_URL;
 }
 
 function getSessionId(): string {
@@ -200,23 +197,15 @@ async function httpRequest(method: string, path: string, body?: object): Promise
   return text ? JSON.parse(text) : {};
 }
 
-function stopPolling(): void {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+function disconnectBridge(): void {
+  sessionId = '';
   paired = false;
   connectionError = false;
-}
-
-function disconnectBridge(): void {
-  stopPolling();
-  connectionError = false;
-  broadcastStatus({ paired: false, sessionId, connectionError: false });
+  clearSessionId();
+  broadcastStatus({ paired: false, sessionId: '', connectionError: false });
 }
 
 async function requestPairingCode(): Promise<void> {
-  stopPolling();
   clearSessionId();
   sessionId = '';
   pairingCode = '';
@@ -232,7 +221,6 @@ async function requestPairingCode(): Promise<void> {
       saveSessionId(sessionId);
       showToast(`配对码: ${pairingCode}`, 'info');
       broadcastStatus({ paired: false, sessionId, pairingCode, url: result.url, connectionError: false });
-      startEdaPolling();
     }
   } catch (err) {
     console.error('[AI Bridge] Request pairing failed:', err);
@@ -245,7 +233,6 @@ async function pollCommands(): Promise<void> {
 
   if (pairingCode && Date.now() > pairingExpiresAt) {
     showToast('配对码已过期', 'error');
-    stopPolling();
     pairingCode = '';
     sessionId = '';
     clearSessionId();
@@ -293,35 +280,10 @@ async function pollCommands(): Promise<void> {
     connectionError = true;
     if (err?.message?.includes('401') || err?.message?.includes('Unauthorized')) {
       console.log('[POLL] Session invalid, clearing...');
-      stopPolling();
       clearSessionId();
       sessionId = '';
       showToast('会话已失效，请重新请求配对码', 'error');
     }
-    broadcastStatus({ paired, sessionId, connectionError: true });
-  }
-}
-
-function startEdaPolling(): void {
-  if (pollTimer) return;
-
-  pollTimer = setInterval(() => {
-    pollCommands();
-  }, 3000);
-}
-
-async function checkPairedStatus(): Promise<void> {
-  if (!sessionId) return;
-  try {
-    const result = await httpRequest('GET', `/poll/${sessionId}`) as any;
-    connectionError = false;
-    if (result.paired) {
-      paired = true;
-      broadcastStatus({ paired, sessionId, connectionError: false });
-    }
-  } catch (e) {
-    console.log('[AI Bridge] Check paired status failed:', e);
-    connectionError = true;
     broadcastStatus({ paired, sessionId, connectionError: true });
   }
 }

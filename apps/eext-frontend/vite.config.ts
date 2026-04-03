@@ -9,8 +9,18 @@ function copyEntryPlugin(): any {
     buildStart() {
       const srcPath = path.resolve(__dirname, 'src/entry.ts');
       const destPath = path.resolve(__dirname, '../extension/src/index.ts');
-      fs.copyFileSync(srcPath, destPath);
-      console.log('[copy-entry] Copied entry.ts to extension/src/index.ts');
+      
+      const pkgPath = path.resolve(__dirname, '../extension/package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const bridgeUrl = pkg.bridgeUrl || 'http://localhost:49620';
+      
+      let content = fs.readFileSync(srcPath, 'utf-8');
+      content = content.replace(
+        /const _BRIDGE_URL: string = [^;]+;/,
+        `const _BRIDGE_URL: string = ${JSON.stringify(bridgeUrl)};`
+      );
+      fs.writeFileSync(destPath, content);
+      console.log(`[copy-entry] Copied entry.ts to extension/src/index.ts (bridgeUrl: ${bridgeUrl})`);
       
       const htmlSrc = path.resolve(__dirname, '../extension/iframe/index.html');
       const htmlDest = path.resolve(__dirname, '../extension/dist/index.html');

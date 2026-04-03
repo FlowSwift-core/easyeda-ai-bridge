@@ -1,6 +1,8 @@
 # EasyEDA AI Bridge
 
-将 AI Coding 工具连接到你的 EasyEDA 设计工作区。
+0 配置、开箱即用，一键连接到任意 AI Agent。
+
+无需安装任何 MCP 或 Skill。
 
 完美支持 **Claude Code**、**OpenCode**、**Gemini CLI**、**Cursor**、**Cline**、**RooCode** 等主流 AI 编程工具。
 
@@ -15,8 +17,8 @@
 ### 2. 配对连接
 
 1. 点击菜单 **EasyEDA AI Bridge → 打开 AI Bridge**
-2. 点击 **请求配对码**，获取 6 位数字码
-3. 在你的 AI Coding 工具中输入配对码完成连接
+2. 点击 **获取配对码**，复制生成的**配对链接**
+3. 粘贴到你的 AI Coding 工具中完成连接
 
 ## 常用 EDA API
 
