@@ -25,8 +25,8 @@
 	"images": {
 		"logo": "./images/logo.png"
 	},
-	"homepage": "https://github.com/easyeda-ai/bridge",
-	"bugs": "https://github.com/easyeda-ai/bridge/issues",
+	"homepage": "https://github.com/FlowSwift-core/easy-eda-bridge/",
+	"bugs": "https://github.com/FlowSwift-core/easy-eda-bridge/issues",
 	"activationEvents": {
 		"onStartupFinished": true
 	},
