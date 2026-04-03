@@ -2,6 +2,11 @@
   "name": "eext-frontend",
   "private": true,
   "version": "1.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wanghsinche/easy-eda-bridge.git",
+    "directory": "apps/eext-frontend"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

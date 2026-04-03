@@ -2,7 +2,15 @@
   "name": "easy-eda-bridge-monorepo",
   "private": true,
   "version": "1.0.0",
-  "description": "Monorepo for EasyEDA Pro AI Bridge and Extension",
+  "description": "Monorepo for EasyEDA AI Bridge — connect any AI agent to EasyEDA",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wanghsinche/easy-eda-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wanghsinche/easy-eda-bridge/issues"
+  },
+  "homepage": "https://github.com/wanghsinche/easy-eda-bridge#readme",
   "scripts": {
     "dev:bridge": "pnpm --filter bridge run server",
     "build:extension": "pnpm --filter extension run build"
