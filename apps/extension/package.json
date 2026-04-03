@@ -18,7 +18,7 @@
 	},
 	"scripts": {
 		"update-build-time": "ts-node ./build/update-build-time.ts",
-		"prebuild": "cd ../eext-frontend && npm run build && cd ../extension && npx ts-node ./sync-version.ts",
+		"prebuild": "cd ../eext-frontend && npm run build && cd ../extension && npx ts-node ./build/sync-version.ts",
 		"precompile": "cp -r ./dist ./dist.bak",
 		"compile": "ts-node ./config/esbuild.prod.ts",
 		"postcompile": "cp -r ./dist.bak/iframe.js ./dist.bak/styles.css ./dist.bak/index.html ./dist/ 2>/dev/null || true && rm -rf ./dist.bak",

@@ -7,6 +7,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 
 const PAIRING_TEMPLATE = readFileSync('./public/instruction.md', 'utf-8');
 
@@ -96,6 +97,12 @@ const sessionFromParam = (c) => c.req.param('sessionId');
 
 const app = new Hono();
 
+app.use('*', cors({
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'X-Session-Id'],
+}));
+
 app.use('/pairing.html', serveStatic({ root: './public' }));
 
 app.get('/instruction', (c) => {
@@ -106,13 +113,6 @@ app.get('/instruction', (c) => {
   return c.text(html, 200, {
     'Content-Type': 'text/plain; charset=utf-8',
   });
-});
-
-app.use('*', async (c, next) => {
-  c.res.headers.set('Access-Control-Allow-Origin', '*');
-  c.res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  c.res.headers.set('Access-Control-Allow-Headers', 'Content-Type, X-Session-Id');
-  await next();
 });
 
 app.options('*', (c) => c.text('', 204));

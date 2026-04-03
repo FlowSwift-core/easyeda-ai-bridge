@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-const extDir = __dirname;
+const extDir = path.resolve(__dirname, '..');
 const packageJsonPath = path.join(extDir, 'package.json');
 const extensionJsonPath = path.join(extDir, 'extension.json');
 const versionTsPath = path.join(extDir, 'src/version.ts');
