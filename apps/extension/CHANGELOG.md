@@ -1,16 +1,6 @@
 # Changelog
 
-## 1.1.0 (2026-04-03)
-
-品牌升级与体验优化
-
-- 团队更名为 FlowSwift
-- 更新仓库地址至 FlowSwift-core 组织
-- 优化 README 文档，突出远程任意电脑控制能力
-- 新增 Config 和 Chat 演示 GIF
-- 更新扩展描述，支持 Claude Code、Cursor、Trea
-
-## 1.0.0 (2026-03-24)
+## 1.0.0 (2026-04-03)
 
 首个正式版本 — EasyEDA AI Bridge
 
