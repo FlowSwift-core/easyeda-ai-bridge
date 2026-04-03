@@ -1,6 +1,6 @@
 import { VERSION } from './version';
 
-const _BRIDGE_URL: string = "http://localhost:49620";
+const _BRIDGE_URL: string = "https://easyeda-ai-bridge.findata-be.uk";
 
 export async function activate(status?: 'onStartupFinished', arg?: string): Promise<void> {
   if (isInitialized) {

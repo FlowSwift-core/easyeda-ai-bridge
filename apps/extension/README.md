@@ -6,7 +6,6 @@
 
 完美支持 **Claude Code**、**OpenCode**、**Gemini CLI**、**Cursor**、**Cline**、**RooCode** 等主流 AI 编程工具。
 
-![EasyEDA AI Bridge](./images/logo.svg)
 
 ## 快速开始
 
