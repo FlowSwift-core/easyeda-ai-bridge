@@ -1,6 +1,6 @@
 {
 	"name": "easy-eda-ai-bridge",
-	"uuid": "303392c332a444e4a8291c722d7f2056",
+	"uuid": "8ce6a64afd744c2884502c60e48cb848",
 	"displayName": "EasyEDA AI Bridge",
 	"description": "一键接入, 支持任意 AI Agent. 无需安装 MCP / Skill.",
 	"version": "1.0.0",
