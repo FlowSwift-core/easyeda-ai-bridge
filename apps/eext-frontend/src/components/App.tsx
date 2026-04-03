@@ -15,7 +15,7 @@ export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
 
   const handleCopyUrl = async () => {
     if (status.url) {
-      await navigator.clipboard.writeText(status.url);
+      await navigator.clipboard.writeText(`Please use the web fetch tool to fetch the following URL and get the instructions: ${status.url}`);
     }
   };
 
