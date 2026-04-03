@@ -2,7 +2,7 @@
 	"name": "easy-eda-ai-bridge",
 	"uuid": "8ce6a64afd744c2884502c60e48cb848",
 	"displayName": "EasyEDA AI Bridge",
-	"description": "一键接入, 支持任意 AI Agent. 无需安装 MCP / Skill.",
+	"description": "一键连接任意 AI Agent. 无需 MCP / Skill. 支持 Claude Code, Cursor, Trea.",
 	"version": "1.0.0",
 	"publisher": "FlowSwift",
 	"engines": {
