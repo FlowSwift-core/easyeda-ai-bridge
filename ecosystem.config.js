@@ -11,6 +11,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 49620,
+        HOST: 'https://easyeda-ai-bridge.findata-be.uk',
       },
       error_file: './logs/bridge-error.log',
       out_file: './logs/bridge-out.log',
