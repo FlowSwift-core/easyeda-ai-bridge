@@ -1,17 +1,21 @@
-# 1.1.0 (2026-04-03)
+# Changelog
 
-品牌升级与文档优化
+## 1.1.0 (2026-04-03)
 
-- 统一品牌名称为 EasyEDA AI Bridge
-- 全新连接/桥接主题图标设计
-- 重写 README 文档，聚焦快速上手指南
-- 优化中英双语本地化
+品牌升级与体验优化
 
-# 1.0.0 (2026-03-24)
+- 团队更名为 FlowSwift
+- 更新仓库地址至 FlowSwift-core 组织
+- 优化 README 文档，突出远程任意电脑控制能力
+- 新增 Config 和 Chat 演示 GIF
+- 更新扩展描述，支持 Claude Code、Cursor、Trea
 
-Initial release of Cirai Assistant for EasyEDA Pro.
+## 1.0.0 (2026-03-24)
 
-- Chat-based AI assistance for EDA design
-- Multi-session support
-- Image upload and paste capabilities
-- Easy configuration for OpenAI-compatible and Anthropo-compatible API endpoints
+首个正式版本 — EasyEDA AI Bridge
+
+- 一键连接任意 AI Agent，无需安装 MCP / Skill
+- 支持 Claude Code、Cursor、Trea 等主流 AI 编程工具
+- 本地或远端电脑均可通过配对链接远程控制 EasyEDA
+- 支持原理图/PCB 数据读取与操作
+- 6 位配对码安全连接机制
