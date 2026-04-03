@@ -18,7 +18,8 @@ function renderPairingTemplate(code, expires) {
   
   return PAIRING_TEMPLATE
     .replace(/{code}/g, codeDisplay)
-    .replace(/{expires}/g, expiresText);
+    .replace(/{expires}/g, expiresText)
+    .replace(/{host}/g, HOST);
 }
 import { initDatabase, getDb, closeDatabase } from './db.mjs';
 
@@ -108,10 +109,10 @@ app.use('/pairing.html', serveStatic({ root: './public' }));
 app.get('/instruction', (c) => {
   const code = c.req.query('code') || '';
   const expires = parseInt(c.req.query('expires') || '0', 10);
-  const html = renderPairingTemplate(code, expires);
+  const md = renderPairingTemplate(code, expires);
   
-  return c.text(html, 200, {
-    'Content-Type': 'text/plain; charset=utf-8',
+  return c.text(md, 200, {
+    'Content-Type': 'text/markdown; charset=utf-8',
   });
 });
 

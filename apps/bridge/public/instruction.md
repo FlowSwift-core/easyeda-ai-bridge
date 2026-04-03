@@ -1,136 +1,151 @@
-# EasyEDA AI Bridge - Agent 配对
-
-## 配对码
-
-**{code}**
-
-{expires}
-
+---
+name: easyeda-ai-bridge
+description: >
+  Control EasyEDA Pro (schematic & PCB) via AI agent. Read components, place parts, route wires, and manipulate designs.
+  Use this skill when the user wants to interact with EasyEDA Pro EDA software.
+  After pairing, execute JavaScript code on the `eda` global object to control the application.
+license: Apache-2.0
+compatibility:
+  - Claude Code
+  - Cursor
+  - OpenCode
+  - Gemini CLI
+  - Cline
+  - RooCode
+  - Trea
+metadata:
+  author: FlowSwift
+  version: 1.0.0
+  tags:
+    - eda
+    - easyeda
+    - pcb
+    - schematic
+    - electronics
 ---
 
-## 配对步骤
+# EasyEDA AI Bridge
 
-1. 调用 `POST /pairing/verify` API 验证配对码
-2. 获取 sessionId
-3. 使用 sessionId 调用 `/execute` 接口执行代码
+Control EasyEDA Pro EDA software remotely. This skill enables AI agents to read schematic/PCB data, place components, route wires, and manipulate designs via JavaScript code execution.
 
----
+## Pairing Info
 
-## EDA API 参考
+**Pairing Code**: {code}
 
-EasyEDA Pro 的 API 全部挂载在全局 `eda` 对象上。代码在 `new Function('eda', 'return ' + code)` 中执行。
+**Expires**: {expires}
 
-### ⚠️ 代码执行规则
+## How to Use
 
-- **不要使用 `const`/`let` 声明变量**
-- **不要使用顶层 `await`**（使用 `.then()` 链或 IIFE）
-- 所有 API 返回值都是 Promise
-- 代码在沙箱中执行，无法访问外部变量
-
-### API 命名规则
-
-标准调用格式：`eda` + `类实例对象名` + `方法名/变量名`
-
-类实例对象名为类名下划线前三个字母小写，例如：
-
-| 类名             | 调用方式                    |
-| ---------------- | --------------------------- |
-| `SYS_I18n`       | `eda.sys_I18n.text()`       |
-| `SYS_ToastMessage` | `eda.sys_ToastMessage.showMessage()` |
-| `SYS_Storage`    | `eda.sys_Storage.getExtensionUserConfig()` |
-| `PCB_Document`   | `eda.pcb_Document.getCurrent()` |
-
-### 常用 API 分类
-
-| 命名空间 | 说明 |
-|----------|------|
-| `eda.sys_*` | 系统级 API（存储、消息、对话框、HTTP 请求、国际化等） |
-| `eda.sch_*` | 原理图 API（元件、网络、文档操作） |
-| `eda.pcb_*` | PCB 设计 API（走线、焊盘、层管理、文档操作） |
-| `eda.dmt_*` | 文档管理 API（工程信息、文件操作） |
-
-### 获取完整 API 参考
-
-1. **类型定义（推荐）**: 安装 `@jlceda/pro-api-types` 获取完整 TypeScript 类型定义
-   ```bash
-   npm install @jlceda/pro-api-types
-   ```
-   安装后查看 `node_modules/@jlceda/pro-api-types` 中的类型文件，包含所有 API 的完整接口。
-
-2. **官方开发文档**: https://github.com/easyeda/extension-dev-skill/tree/main/resources/guide
-   - [调用扩展 API](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/invoke-apis.md)
-   - [内联框架](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/inline-frame.md)
-   - [错误处理](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/error-handling.md)
-   - [扩展配置](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/extension-json.md)
-
-3. **官方扩展案例**: https://github.com/easyeda
-
----
-
-## Bridge API 参考
-
-### 1. 验证配对码
+### Step 1: Verify Pairing Code
 
 ```
-POST /pairing/verify
+POST {host}/pairing/verify
 Content-Type: application/json
 
 {"code": "{code}"}
 ```
 
-返回:
+Response:
 ```json
 {"success": true, "sessionId": "sess_xxx"}
 ```
 
-### 2. 执行代码
+### Step 2: Execute Code
+
+After obtaining `sessionId`, use it to execute JavaScript code in EasyEDA:
 
 ```
-POST /execute
+POST {host}/execute
 X-Session-Id: <sessionId>
 Content-Type: application/json
 
 {"code": "eda.dmt_Project.getCurrentProjectInfo().then(p=>p?.friendlyName)"}
 ```
 
-### 3. 轮询命令（可选）
+## Code Execution Rules
 
-```
-GET /poll/<sessionId>
-```
+- **No `const`/`let` variable declarations** — all code runs in `new Function('eda', 'return ' + code)`
+- **No top-level `await`** — use `.then()` chains or IIFE `(async()=>{...})()`
+- All API calls return Promises
+- Code runs in a sandboxed environment with only the `eda` object available
 
----
+## API Naming Convention
 
-## 代码执行示例
+All EasyEDA APIs are on the global `eda` object. The naming pattern is:
+
+`eda` + `lowercase_first_3_letters_of_class_name` + `MethodName`
+
+Examples:
+
+| Class | API Call |
+|-------|----------|
+| `SYS_I18n` | `eda.sys_I18n.text()` |
+| `SYS_ToastMessage` | `eda.sys_ToastMessage.showMessage()` |
+| `SYS_Storage` | `eda.sys_Storage.getExtensionUserConfig()` |
+| `PCB_Document` | `eda.pcb_Document.getCurrent()` |
+
+## API Namespaces
+
+| Namespace | Description |
+|-----------|-------------|
+| `eda.sys_*` | System APIs (storage, dialogs, HTTP requests, i18n, toast messages) |
+| `eda.sch_*` | Schematic APIs (components, wires, nets, document operations) |
+| `eda.pcb_*` | PCB APIs (tracks, pads, layers, document operations) |
+| `eda.dmt_*` | Document management APIs (project info, file operations) |
+
+## Common Examples
 
 ```javascript
-// 获取当前工程名称
+// Get current project name
 eda.dmt_Project.getCurrentProjectInfo().then(p => p?.friendlyName)
 
-// 获取原理图所有元件 ID
+// Get all schematic component IDs
 eda.sch_PrimitiveComponent.getAllPrimitiveId()
 
-// 读取存储配置
+// Get all schematic components
+eda.sch_PrimitiveComponent.getAll(undefined, true)
+
+// Get all schematic wires
+eda.sch_PrimitiveWire.getAll(true)
+
+// Get all PCB components
+eda.pcb_PrimitiveComponent.getAll()
+
+// Read user config
 eda.sys_Storage.getExtensionUserConfig('myKey')
 
-// 保存存储配置
+// Save user config
 eda.sys_Storage.setExtensionUserConfig('myKey', 'myValue')
 
-// 弹出提示框
+// Show information dialog
 eda.sys_Dialog.showInformationMessage('Hello from AI!', 'AI Bridge')
 
-// 获取 PCB 文档
+// Get current PCB document
 eda.pcb_Document.getCurrent()
 
-// 发送 HTTP 请求
+// Send HTTP request
 eda.sys_ClientUrl.request('https://api.example.com/data', 'GET')
 
-// 国际化文本
+// Show toast message
 eda.sys_ToastMessage.showMessage(eda.sys_I18n.text('Done'), 0)
 ```
 
-## 注意事项
+## Full API Reference
 
-- 复杂操作建议拆分为多个小请求
-- 如需调试，可在 EasyEDA URL 添加 `?cll=debug` 参数，按 F12 打开控制台
-- 如扩展导致严重错误，可在 URL 添加 `?safetyMode=true` 禁用所有扩展
+1. **TypeScript Types (Recommended)**: Install `@jlceda/pro-api-types`
+   ```bash
+   npm install @jlceda/pro-api-types
+   ```
+   Then browse `node_modules/@jlceda/pro-api-types` for complete type definitions.
+
+2. **Official Dev Guide**: https://github.com/easyeda/extension-dev-skill/tree/main/resources/guide
+   - [Invoke Extension APIs](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/invoke-apis.md)
+   - [Inline Frame](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/inline-frame.md)
+   - [Error Handling](https://github.com/easyeda/extension-dev-skill/blob/main/resources/guide/error-handling.md)
+
+## Important Notes
+
+- Break complex operations into multiple small requests for reliability
+- For debugging: add `?cll=debug` to EasyEDA URL and press F12 to open console
+- If the extension causes critical errors: add `?safetyMode=true` to EasyEDA URL to disable all extensions
+- **Required**: The extension must have "Allow External Interaction" enabled in its settings
