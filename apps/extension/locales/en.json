@@ -1,5 +1,5 @@
 {
 	"About": "About",
-	"Cirai v": "Cirai v${1}",
-	"Cirai About Content": "Cirai v${1}\nAI Assistant for EasyEDA Pro\nProvides chat-based Q&A to improve EDA workflow efficiency.\nAuthor: Cirai Team"
+	"EasyEDA AI Bridge v": "EasyEDA AI Bridge v${1}",
+	"EasyEDA AI Bridge About Content": "EasyEDA AI Bridge v${1}\nAI Bridge for EasyEDA Pro\nSecurely connect AI Agents to your EDA workspace via 6-digit pairing code.\nAuthor: EasyEDA AI Team"
 }

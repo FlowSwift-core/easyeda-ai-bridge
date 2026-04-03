@@ -12,7 +12,7 @@
 		"prebuild": "cd ../eext-frontend && npm run build && cd ../extension && npx ts-node ./sync-version.ts",
 		"precompile": "cp -r ./dist ./dist.bak",
 		"compile": "ts-node ./config/esbuild.prod.ts",
-		"postcompile": "cp -r ./dist.bak/* ./dist/ 2>/dev/null || true && rm -rf ./dist.bak",
+		"postcompile": "cp -r ./dist.bak/iframe.js ./dist.bak/styles.css ./dist.bak/index.html ./dist/ 2>/dev/null || true && rm -rf ./dist.bak",
 		"lint": "eslint",
 		"fix": "eslint --fix",
 		"build": "npm run compile && ts-node ./build/packaged.ts"
@@ -33,6 +33,7 @@
 		"jszip": "^3.10.1",
 		"lint-staged": "^16.2.3",
 		"rimraf": "^6.0.1",
+		"sharp": "^0.34.5",
 		"simple-git-hooks": "^2.13.1",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.7.3"

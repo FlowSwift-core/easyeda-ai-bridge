@@ -44,7 +44,7 @@ export async function openIFrame(): Promise<void> {
   await eda.sys_IFrame.openIFrame('/dist/index.html', 600, 800, 'ai-bridge-launch', {
     maximizeButton: true,
     minimizeButton: true,
-    title: 'Launch AI Bridge',
+    title: 'EasyEDA AI Bridge',
   });
 }
 
@@ -125,26 +125,42 @@ function broadcastEvent(type: string, data: unknown): void {
 function toSerializable(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
-  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'bigint') return { __type: 'bigint', value: value.toString() };
   if (typeof value === 'function') return `[Function ${value.name || 'anonymous'}]`;
-  if (depth >= 4) return '[MaxDepthExceeded]';
+  if (depth >= 10) return '[MaxDepthExceeded]';
 
   const tracked = seen ?? new WeakSet<object>();
-  if (typeof value === 'object') {
-    if (tracked.has(value as object)) return '[Circular]';
-    tracked.add(value as object);
+  if (typeof value === 'object' && value !== null) {
+    if (tracked.has(value)) return '[Circular]';
+    tracked.add(value);
   }
 
   if (Array.isArray(value)) {
-    return value.slice(0, 120).map(item => toSerializable(item, depth + 1, tracked));
+    return value.slice(0, 500).map(item => toSerializable(item, depth + 1, tracked));
   }
 
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return { __type: 'Date', value: value.toISOString() };
+  if (value instanceof RegExp) return { __type: 'RegExp', value: value.toString() };
+  if (value instanceof Error) return { __type: 'Error', name: value.name, message: value.message, stack: value.stack };
+  if (value instanceof URL) return { __type: 'URL', value: value.href };
+  if (value instanceof Map) return { __type: 'Map', entries: Array.from(value.entries()).map(([k, v]) => [toSerializable(k, depth + 1, tracked), toSerializable(v, depth + 1, tracked)]) };
+  if (value instanceof Set) return { __type: 'Set', values: Array.from(value).map(v => toSerializable(v, depth + 1, tracked)) };
 
-  if (typeof value === 'object') {
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer) {
+    const bytes = value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    return { __type: value.constructor.name, value: Array.from(bytes) };
+  }
+
+  if (typeof value === 'object' && value !== null) {
     const output: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value)) {
-      output[key] = toSerializable(child, depth + 1, tracked);
+    const isPlain = value.constructor === Object;
+    const keys = isPlain ? Object.keys(value) : Object.getOwnPropertyNames(value).filter(k => k !== 'constructor' && k !== '__proto__');
+    for (const key of keys) {
+      try {
+        output[key] = toSerializable((value as Record<string, unknown>)[key], depth + 1, tracked);
+      } catch {
+        output[key] = '[Unserializable]';
+      }
     }
     return output;
   }

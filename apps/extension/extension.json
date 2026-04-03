@@ -1,8 +1,8 @@
 {
 	"name": "easy-eda-ai-bridge",
 	"uuid": "303392c332a444e4a8291c722d7f2056",
-	"displayName": "AI Bridge",
-	"description": "WebSocket bridge between EasyEDA Pro and AI agents.",
+	"displayName": "EasyEDA AI Bridge",
+	"description": "将 AI Agents 无缝连接到你的 EasyEDA 设计工作区。通过 6 位配对码实现安全、快速的本地桥接。",
 	"version": "1.0.0",
 	"publisher": "EasyEDA AI Team",
 	"engines": {
@@ -35,8 +35,8 @@
 	"headerMenus": {
 		"home": [
 			{
-				"id": "ai-bridge",
-				"title": "AI Bridge",
+				"id": "easyeda-ai-bridge",
+				"title": "EasyEDA AI Bridge",
 				"menuItems": [
 					{
 						"id": "OpenIFrame",
@@ -53,8 +53,8 @@
 		],
 		"sch": [
 			{
-				"id": "ai-bridge",
-				"title": "AI Bridge",
+				"id": "easyeda-ai-bridge",
+				"title": "EasyEDA AI Bridge",
 				"menuItems": [
 					{
 						"id": "OpenIFrame",
@@ -71,8 +71,8 @@
 		],
 		"pcb": [
 			{
-				"id": "ai-bridge",
-				"title": "AI Bridge",
+				"id": "easyeda-ai-bridge",
+				"title": "EasyEDA AI Bridge",
 				"menuItems": [
 					{
 						"id": "OpenIFrame",

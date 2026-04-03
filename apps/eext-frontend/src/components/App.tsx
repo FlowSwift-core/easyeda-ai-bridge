@@ -39,6 +39,23 @@ export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
     await onDisconnect();
   };
 
+  const handleCopyLogs = async () => {
+    if (events.length === 0) return;
+    const text = events
+      .map((e) => {
+        const tag = e.type === 'execute' ? '执行' : e.type === 'result' ? '结果' : '错误';
+        const content =
+          e.type === 'execute'
+            ? e.data?.code ?? ''
+            : e.type === 'result'
+              ? JSON.stringify(e.data?.result, null, 2)
+              : e.data?.error ?? '';
+        return `[${tag}] ${content}`;
+      })
+      .join('\n\n');
+    await navigator.clipboard.writeText(text);
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -111,7 +128,16 @@ export function App({ eda, onRequestPairing, onDisconnect }: AppProps) {
       </div>
 
       <section className="log-section">
-        <h2 className="section-title">执行日志</h2>
+        <div className="log-header">
+          <h2 className="section-title">执行日志</h2>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={handleCopyLogs}
+            disabled={events.length === 0}
+          >
+            复制日志
+          </button>
+        </div>
         <div className="log-list">
           {events.length === 0 ? (
             <div className="log-empty">暂无日志</div>

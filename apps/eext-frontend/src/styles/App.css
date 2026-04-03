@@ -401,11 +401,38 @@ body {
 }
 
 .log-list {
-  max-height: 180px;
+  max-height: 400px;
   overflow-y: auto;
   background: var(--bg-primary);
   border-radius: 6px;
   padding: 8px;
+}
+
+.log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.log-header .section-title {
+  margin-bottom: 0;
+}
+
+.log-header .section-title::after {
+  display: none;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+.btn-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .log-empty {
