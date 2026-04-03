@@ -2,7 +2,7 @@
 	"name": "extension",
 	"version": "1.0.0",
 	"description": "EasyEDA AI Bridge Extension",
-	"author": "EasyEDA AI Team",
+	"author": "FlowSwift",
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",

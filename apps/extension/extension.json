@@ -4,7 +4,7 @@
 	"displayName": "EasyEDA AI Bridge",
 	"description": "一键接入, 支持任意 AI Agent. 无需安装 MCP / Skill.",
 	"version": "1.0.0",
-	"publisher": "EasyEDA AI Team",
+	"publisher": "FlowSwift",
 	"engines": {
 		"eda": "^3.0.0"
 	},
