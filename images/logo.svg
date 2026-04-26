@@ -1,0 +1,18 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="200" fill="#0d1117"/>
+
+  <!-- Layered cube icon - yellow stroke -->
+  <g stroke="#d29922" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Top face -->
+    <path d="M512 240 L240 376 L512 512 L784 376 Z"/>
+    <!-- Middle layer left -->
+    <path d="M240 376 L512 512 L512 648 L240 514 Z"/>
+    <!-- Middle layer right -->
+    <path d="M784 376 L512 512 L512 648 L784 514 Z"/>
+    <!-- Bottom layer left -->
+    <path d="M240 514 L512 648 L512 784 L240 650 Z"/>
+    <!-- Bottom layer right -->
+    <path d="M784 514 L512 648 L512 784 L784 650 Z"/>
+  </g>
+</svg>
